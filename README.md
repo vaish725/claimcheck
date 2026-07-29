@@ -67,6 +67,47 @@ pass a path argument to check a repo other than the current directory:
 claimcheck verify -claims path/to/claims.yaml path/to/repo
 ```
 
+## Regenerating numbers with `update`
+
+`claimcheck update` recomputes every claim and rewrites both `claims.yaml`'s
+declared values and every marked span in the files each claim's
+`asserted_in` lists, so refreshing a README or resume is one command
+instead of manual editing:
+
+```
+claimcheck update
+```
+
+Use `-dry-run` to see what would change without writing anything:
+
+```
+claimcheck update -dry-run
+```
+
+To make a value in a file rewritable, wrap it in a matching pair of
+markers named after the claim's id:
+
+```markdown
+Tests: <!-- claimcheck:test_count -->88<!-- /claimcheck:test_count --> passing.
+```
+
+Only the text *between* the markers is replaced, so put any unit outside
+the closing tag, not inside it:
+
+```markdown
+Coverage: <!-- claimcheck:coverage -->54<!-- /claimcheck:coverage -->%.
+```
+
+`update` never writes a partial file: each rewrite is a temp-file-plus-rename,
+so an interrupted run can't corrupt a source file, and comments and
+formatting elsewhere in `claims.yaml` are left exactly as they were - only
+the numeric `declared:` value itself changes. Declared values must be bare
+(unquoted) numbers for `update` to find them.
+
+If any claim's actual value can't be recomputed, `update` still applies
+every claim it could and reports the failure, exiting non-zero so a
+partial update doesn't look like a clean one.
+
 ## Claim types
 
 | Type | Runner | What it measures |
@@ -113,6 +154,7 @@ jobs:
 
 Test count, coverage, LOC, and commit count claims are implemented for Go
 and Python repos, with concurrent extraction and a per-claim timeout so a
-hung subprocess can't hang CI. `claimcheck update` (rewriting declared
-values and marked README/LaTeX spans), a benchmark extractor, and resume
+hung subprocess can't hang CI. `claimcheck verify` and `claimcheck update`
+(marker rewriting in README-style files, atomic writes) are both
+implemented. LaTeX span substitution, the benchmark extractor, and resume
 mode across multiple repos are not built yet.

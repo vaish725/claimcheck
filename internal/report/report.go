@@ -93,14 +93,14 @@ func (r Report) Write(w io.Writer) error {
 	for _, row := range r.Rows {
 		if row.Verdict == Error {
 			fmt.Fprintf(tw, "%s\t%s\t-\t-\t%s\t%s (%s)\n",
-				row.Claim.ID, formatFloat(row.Claim.Declared), row.Claim.Tolerance, row.Verdict, row.Err)
+				row.Claim.ID, FormatFloat(row.Claim.Declared), row.Claim.Tolerance, row.Verdict, row.Err)
 			continue
 		}
 		delta := row.Actual - row.Claim.Declared
 		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n",
 			row.Claim.ID,
-			formatFloat(row.Claim.Declared),
-			formatFloat(row.Actual),
+			FormatFloat(row.Claim.Declared),
+			FormatFloat(row.Actual),
 			formatSignedFloat(delta),
 			row.Claim.Tolerance,
 			row.Verdict,
@@ -109,21 +109,23 @@ func (r Report) Write(w io.Writer) error {
 	return tw.Flush()
 }
 
-// formatFloat rounds to 4 decimal places (enough to preserve any real
+// FormatFloat rounds to 4 decimal places (enough to preserve any real
 // precision a claim cares about) before trimming trailing zeros, so
 // "88.0" prints as "88" and "76.8" prints as "76.8" rather than the
 // float64 rounding noise that plain subtraction can introduce (e.g.
-// "7.349999999999994" instead of "7.35").
-func formatFloat(f float64) string {
+// "7.349999999999994" instead of "7.35"). Exported so the update package
+// can format the same values it writes back into claims.yaml and marked
+// spans exactly as the drift report would show them.
+func FormatFloat(f float64) string {
 	rounded := math.Round(f*1e4) / 1e4
 	return strconv.FormatFloat(rounded, 'f', -1, 64)
 }
 
-// formatSignedFloat is formatFloat with an explicit "+" for non-negative
+// formatSignedFloat is FormatFloat with an explicit "+" for non-negative
 // deltas, so the drift report reads as "+3" / "-2" rather than "3" / "-2".
 func formatSignedFloat(f float64) string {
 	if f >= 0 {
-		return "+" + formatFloat(f)
+		return "+" + FormatFloat(f)
 	}
-	return formatFloat(f)
+	return FormatFloat(f)
 }

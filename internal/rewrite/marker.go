@@ -8,6 +8,7 @@ package rewrite
 import (
 	"fmt"
 	"regexp"
+	"sort"
 )
 
 // Marker is one <!-- claimcheck:ID --> ... <!-- /claimcheck:ID --> span
@@ -83,19 +84,51 @@ func Replace(content []byte, values map[string]string) ([]byte, error) {
 		return nil, err
 	}
 
-	// Markers come back from Parse in left-to-right, non-overlapping order
-	// (nesting is rejected), so a single forward pass copying up to each
-	// replaced span is enough - no need to sort or track visited ranges.
+	spans := make([]Span, len(markers))
+	for i, mk := range markers {
+		spans[i] = Span{ID: mk.ID, Start: mk.ContentStart, End: mk.ContentEnd}
+	}
+
+	return ReplaceSpans(content, spans, values)
+}
+
+// Span is a byte range [Start, End) in some content, identified by ID, to
+// be replaced. Markers are one way to find spans (tag-delimited, in a
+// README or similar); other callers - such as the update package locating
+// claims.yaml's "declared:" scalars via a YAML node walk - find spans a
+// different way but get the same byte-splice-and-atomic-write guarantee
+// by going through this same primitive.
+type Span struct {
+	ID         string
+	Start, End int
+}
+
+// ReplaceSpans returns new content with each span's bytes replaced by
+// values[span.ID]. A span whose id has no entry in values is left exactly
+// as it was. Spans do not need to be given in order, but must not overlap;
+// ReplaceSpans sorts them by Start and returns an error if any overlap.
+func ReplaceSpans(content []byte, spans []Span, values map[string]string) ([]byte, error) {
+	sorted := make([]Span, len(spans))
+	copy(sorted, spans)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Start < sorted[j].Start })
+
+	for i := 1; i < len(sorted); i++ {
+		if sorted[i].Start < sorted[i-1].End {
+			return nil, fmt.Errorf("replace spans: span %q [%d,%d) overlaps span %q [%d,%d)",
+				sorted[i-1].ID, sorted[i-1].Start, sorted[i-1].End, sorted[i].ID, sorted[i].Start, sorted[i].End)
+		}
+	}
+
 	var out []byte
 	cursor := 0
-	for _, mk := range markers {
-		replacement, ok := values[mk.ID]
+	for _, sp := range sorted {
+		replacement, ok := values[sp.ID]
 		if !ok {
 			continue
 		}
-		out = append(out, content[cursor:mk.ContentStart]...)
+		out = append(out, content[cursor:sp.Start]...)
 		out = append(out, replacement...)
-		cursor = mk.ContentEnd
+		cursor = sp.End
 	}
 	out = append(out, content[cursor:]...)
 

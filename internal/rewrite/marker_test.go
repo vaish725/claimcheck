@@ -7,6 +7,47 @@ import (
 	"testing"
 )
 
+func TestReplaceSpansOutOfOrderInput(t *testing.T) {
+	content := []byte("aaXbbYcc") // X at [2,3), Y at [5,6)
+	spans := []Span{
+		{ID: "y", Start: 5, End: 6}, // given out of order on purpose
+		{ID: "x", Start: 2, End: 3},
+	}
+
+	got, err := ReplaceSpans(content, spans, map[string]string{"x": "1", "y": "22"})
+	if err != nil {
+		t.Fatalf("ReplaceSpans: %v", err)
+	}
+	if want := "aa1bb22cc"; string(got) != want {
+		t.Errorf("ReplaceSpans = %q, want %q", got, want)
+	}
+}
+
+func TestReplaceSpansOverlapError(t *testing.T) {
+	content := []byte("abcdef")
+	spans := []Span{
+		{ID: "a", Start: 0, End: 3},
+		{ID: "b", Start: 2, End: 5}, // overlaps "a"
+	}
+
+	if _, err := ReplaceSpans(content, spans, map[string]string{"a": "x", "b": "y"}); err == nil {
+		t.Fatal("expected an error for overlapping spans, got none")
+	}
+}
+
+func TestReplaceSpansUnknownIDLeftUntouched(t *testing.T) {
+	content := []byte("aaXbb")
+	spans := []Span{{ID: "x", Start: 2, End: 3}}
+
+	got, err := ReplaceSpans(content, spans, map[string]string{"other": "1"})
+	if err != nil {
+		t.Fatalf("ReplaceSpans: %v", err)
+	}
+	if string(got) != string(content) {
+		t.Errorf("ReplaceSpans = %q, want unchanged %q", got, content)
+	}
+}
+
 func TestReplaceGolden(t *testing.T) {
 	cases := []struct {
 		name   string

@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/vaish725/claimcheck/internal/update"
 	"github.com/vaish725/claimcheck/internal/verify"
 )
 
@@ -26,6 +27,8 @@ func run(args []string) int {
 	switch args[0] {
 	case "verify":
 		return runVerify(args[1:])
+	case "update":
+		return runUpdate(args[1:])
 	case "-h", "--help", "help":
 		usage()
 		return 0
@@ -41,6 +44,7 @@ func usage() {
 
 Usage:
   claimcheck verify [flags] [repo-path]
+  claimcheck update [flags] [repo-path]
 
 repo-path defaults to the current directory.
 
@@ -49,7 +53,29 @@ Flags for verify:
         path to claims.yaml (default "<repo-path>/claims.yaml")
   -soft
         print the drift report without failing (exit 0 even on breach)
+
+Flags for update:
+  -claims string
+        path to claims.yaml (default "<repo-path>/claims.yaml")
+  -dry-run
+        print what would change without writing anything
 `)
+}
+
+// resolvePaths applies the shared repo-path/claims-path convention both
+// subcommands use: the first positional argument is the repo to inspect
+// (default "."), and claims.yaml lives at its root unless -claims points
+// elsewhere.
+func resolvePaths(fs *flag.FlagSet, claimsFlag string) (repoPath, claimsPath string) {
+	repoPath = "."
+	if fs.NArg() > 0 {
+		repoPath = fs.Arg(0)
+	}
+	claimsPath = claimsFlag
+	if claimsPath == "" {
+		claimsPath = filepath.Join(repoPath, "claims.yaml")
+	}
+	return repoPath, claimsPath
 }
 
 // runVerify implements the `claimcheck verify` subcommand: load claims.yaml,
@@ -64,15 +90,7 @@ func runVerify(args []string) int {
 		return 2
 	}
 
-	repoPath := "."
-	if fs.NArg() > 0 {
-		repoPath = fs.Arg(0)
-	}
-
-	claimsPath := *claimsFlag
-	if claimsPath == "" {
-		claimsPath = filepath.Join(repoPath, "claims.yaml")
-	}
+	repoPath, claimsPath := resolvePaths(fs, *claimsFlag)
 
 	rep, err := verify.Run(context.Background(), repoPath, claimsPath)
 	if err != nil {
@@ -86,6 +104,47 @@ func runVerify(args []string) int {
 	}
 
 	if rep.Breached() && !*soft {
+		return 1
+	}
+	return 0
+}
+
+// runUpdate implements the `claimcheck update` subcommand: recompute every
+// claim, print what changed (or would change), and rewrite claims.yaml and
+// every asserted-in file to match reality unless -dry-run was passed.
+// Non-zero if any claim's actual value couldn't be recomputed, since the
+// update is then incomplete regardless of what did get written.
+func runUpdate(args []string) int {
+	fs := flag.NewFlagSet("update", flag.ContinueOnError)
+	claimsFlag := fs.String("claims", "", "path to claims.yaml (default \"<repo-path>/claims.yaml\")")
+	dryRun := fs.Bool("dry-run", false, "print what would change without writing anything")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	repoPath, claimsPath := resolvePaths(fs, *claimsFlag)
+
+	plan, err := update.BuildPlan(context.Background(), repoPath, claimsPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "claimcheck: %v\n", err)
+		return 1
+	}
+
+	applied := false
+	if !*dryRun && plan.Changed() {
+		if err := update.Apply(plan); err != nil {
+			fmt.Fprintf(os.Stderr, "claimcheck: %v\n", err)
+			return 1
+		}
+		applied = true
+	}
+
+	if err := plan.Write(os.Stdout, applied); err != nil {
+		fmt.Fprintf(os.Stderr, "claimcheck: writing summary: %v\n", err)
+		return 1
+	}
+
+	if plan.Failed() {
 		return 1
 	}
 	return 0
