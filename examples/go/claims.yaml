@@ -1,0 +1,38 @@
+# Example claims.yaml for a Go repo. Copy this into your repo root, adjust
+# the declared values to match reality today, then run:
+#
+#   claimcheck verify
+#
+# Every claim must state a tolerance: "exact", an absolute band ("+-5"), or
+# a relative band ("+-10%"). There is no default, on purpose - a claim with
+# no tolerance is a claim with no definition of "still true".
+
+repo: example-go-repo
+
+claims:
+  - id: test_count
+    type: test_count
+    runner: go
+    declared: 88
+    tolerance: exact          # "88 tests" is a claim about an exact count
+    asserted_in: [README.md]
+
+  - id: coverage
+    type: coverage
+    runner: go
+    declared: 54
+    unit: percent
+    tolerance: "+-3%"         # a little slack for incidental drift
+    asserted_in: [README.md, resume]
+
+  - id: loc
+    type: loc
+    declared: 5718
+    tolerance: "+-100"        # LOC moves every commit; a tight band would just nag
+    asserted_in: [resume]
+
+  - id: commits
+    type: commit_count
+    declared: 26
+    tolerance: "+-5"
+    asserted_in: [resume]

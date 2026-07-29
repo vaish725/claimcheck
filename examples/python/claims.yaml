@@ -1,0 +1,35 @@
+# Example claims.yaml for a Python repo using pytest and coverage.py. Copy
+# this into your repo root, adjust the declared values to match reality
+# today, then run:
+#
+#   claimcheck verify
+
+repo: example-python-repo
+
+claims:
+  - id: test_count
+    type: test_count
+    runner: pytest
+    declared: 88
+    tolerance: exact          # "88/88 tests" is a claim about all tests passing
+    asserted_in: [README.md, resume]
+
+  - id: coverage
+    type: coverage
+    runner: pytest
+    declared: 54
+    unit: percent
+    tolerance: "+-3%"
+    asserted_in: [README.md, resume]
+
+  - id: loc
+    type: loc
+    declared: 5718
+    tolerance: "+-100"
+    asserted_in: [resume]
+
+  - id: commits
+    type: commit_count
+    declared: 26
+    tolerance: "+-5"
+    asserted_in: [resume]

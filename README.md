@@ -1,0 +1,118 @@
+# claimcheck
+
+Keep the numeric claims in your README and resume true. Declare each claim
+once in a `claims.yaml` next to the code it describes, then recompute it
+from real repo state on demand. `claimcheck verify` fails when a claim has
+drifted beyond its declared tolerance.
+
+This checks whether claims are *accurate*, not whether the underlying
+numbers are *good*. It is not a coverage gate, a CI dashboard, or a metrics
+history tool.
+
+## Install
+
+```
+go install github.com/vaish725/claimcheck/cmd/claimcheck@latest
+```
+
+Or build from source:
+
+```
+go build -o claimcheck ./cmd/claimcheck
+```
+
+## Usage
+
+Add a `claims.yaml` to the root of the repo you want to check. See
+[examples/go/claims.yaml](examples/go/claims.yaml) or
+[examples/python/claims.yaml](examples/python/claims.yaml) for a starting
+point. Every claim needs an id, a type, a declared value, and a tolerance:
+
+```yaml
+repo: my-project
+claims:
+  - id: test_count
+    type: test_count
+    runner: go
+    declared: 88
+    tolerance: exact
+    asserted_in: [README.md]
+```
+
+Then run:
+
+```
+claimcheck verify
+```
+
+This recomputes every claim, prints a drift report, and exits non-zero if
+anything breached tolerance:
+
+```
+CLAIM       DECLARED  ACTUAL  DELTA  TOLERANCE  VERDICT
+test_count  88        91      +3     exact      BREACH
+coverage    54        53.2    -0.8   +-3%       PASS
+```
+
+Use `-soft` to print the same report without failing the build:
+
+```
+claimcheck verify -soft
+```
+
+Use `-claims` to point at a claims.yaml that isn't in the repo root, and
+pass a path argument to check a repo other than the current directory:
+
+```
+claimcheck verify -claims path/to/claims.yaml path/to/repo
+```
+
+## Claim types
+
+| Type | Runner | What it measures |
+|------|--------|-------------------|
+| `test_count` | `go` or `pytest` | number of tests with a terminal result |
+| `coverage` | `go` or `pytest` | aggregate line coverage percentage |
+| `loc` | none | lines across tracked and non-ignored files (`git ls-files`) |
+| `commit_count` | none | commits reachable from `HEAD` |
+
+## Tolerance
+
+Every claim must declare a tolerance; there is no default. This is
+deliberate: a claim with no stated tolerance has no stated definition of
+"still true".
+
+- `exact` - the actual value must equal the declared value.
+- `+-5` - absolute band.
+- `+-10%` - relative band, as a percentage of the declared value.
+
+Use exact tolerance for claims like "all tests pass". Use a wide relative
+band for anything machine-dependent, like a benchmark. Use a tight
+absolute band for anything a reader would treat as a headline number.
+
+## GitHub Action
+
+Run verification on every push:
+
+```yaml
+name: claimcheck
+on: [push]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - run: go install github.com/vaish725/claimcheck/cmd/claimcheck@latest
+      - run: claimcheck verify
+```
+
+## Status
+
+Test count, coverage, LOC, and commit count claims are implemented for Go
+and Python repos, with concurrent extraction and a per-claim timeout so a
+hung subprocess can't hang CI. `claimcheck update` (rewriting declared
+values and marked README/LaTeX spans), a benchmark extractor, and resume
+mode across multiple repos are not built yet.
