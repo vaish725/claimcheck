@@ -17,9 +17,9 @@ func TestParseTolerance(t *testing.T) {
 		{raw: "+-10%", kind: Relative, value: 10},
 		{raw: "±25%", kind: Relative, value: 25},
 		{raw: "", wantErr: true},
-		{raw: "5", wantErr: true},        // missing +- prefix
-		{raw: "+-abc", wantErr: true},    // non-numeric
-		{raw: "+--5", wantErr: true},     // negative tolerance
+		{raw: "5", wantErr: true},     // missing +- prefix
+		{raw: "+-abc", wantErr: true}, // non-numeric
+		{raw: "+--5", wantErr: true},  // negative tolerance
 	}
 
 	for _, tc := range cases {

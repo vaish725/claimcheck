@@ -9,8 +9,8 @@ import (
 
 func TestLOCExtractorCountsTrackedFiles(t *testing.T) {
 	dir := newGitRepo(t)
-	writeFile(t, dir, "main.go", "line1\nline2\nline3\n")   // 3 lines
-	writeFile(t, dir, "pkg/util.go", "line1\nline2\n")       // 2 lines
+	writeFile(t, dir, "main.go", "line1\nline2\nline3\n") // 3 lines
+	writeFile(t, dir, "pkg/util.go", "line1\nline2\n")    // 2 lines
 	runGit(t, dir, "add", "main.go", "pkg/util.go")
 	runGit(t, dir, "commit", "-q", "-m", "initial")
 
@@ -35,9 +35,7 @@ func TestLOCExtractorRespectsGitignore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Extract: %v", err)
 	}
-	// main.go (2 lines) + .gitignore itself (1 line); vendor/dep.go's 4
-	// lines must not be included.
-	if got != 3 {
+	if got != 3 { // main.go (2) + .gitignore itself (1); vendor/dep.go's 4 lines excluded
 		t.Errorf("loc = %v, want 3 (vendor/dep.go should be excluded)", got)
 	}
 }
@@ -47,9 +45,7 @@ func TestLOCExtractorIncludesUntrackedNonIgnoredFiles(t *testing.T) {
 	writeFile(t, dir, "main.go", "line1\nline2\n")
 	runGit(t, dir, "add", "main.go")
 	runGit(t, dir, "commit", "-q", "-m", "initial")
-	// a new file added since the last commit, not yet staged, should still
-	// count: claimcheck measures repo state, not just what's committed.
-	writeFile(t, dir, "new.go", "line1\nline2\nline3\n")
+	writeFile(t, dir, "new.go", "line1\nline2\nline3\n") // untracked, not yet committed; must still count
 
 	got, err := (locExtractor{}).Extract(context.Background(), dir, schema.Claim{})
 	if err != nil {

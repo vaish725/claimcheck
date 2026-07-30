@@ -36,9 +36,7 @@ func TestRunVerifyMissingClaimsFile(t *testing.T) {
 }
 
 func TestRunVerifySoftStillPrintsButExitsZero(t *testing.T) {
-	// A malformed claims.yaml is still a hard error even with -soft: -soft
-	// only suppresses the exit code for claims that were successfully
-	// checked and found breaching, not for a claims.yaml that fails to load.
+	// -soft only suppresses breaches, not a claims.yaml that fails to load.
 	dir := t.TempDir()
 	claimsPath := filepath.Join(dir, "claims.yaml")
 	if err := os.WriteFile(claimsPath, []byte("not: valid: yaml: at: all: ["), 0o644); err != nil {
@@ -51,11 +49,9 @@ func TestRunVerifySoftStillPrintsButExitsZero(t *testing.T) {
 	}
 }
 
-// newUpdateFixture creates a minimal git repo with a claims.yaml (a
-// deliberately wrong commit_count claim) and a README.md marker for it, so
-// `update` has something real to recompute without needing a Go/pytest
-// toolchain run - that extraction path is already covered by
-// internal/update's own tests; this just exercises the CLI wiring.
+// newUpdateFixture creates a minimal git repo with a wrong commit_count
+// claim and a matching README marker, just enough to exercise CLI wiring
+// (extraction itself is covered by internal/update's own tests).
 func newUpdateFixture(t *testing.T) (dir string) {
 	t.Helper()
 	dir = t.TempDir()
@@ -124,9 +120,8 @@ func TestRunUpdateDryRunLeavesFilesUntouched(t *testing.T) {
 	}
 }
 
-// TestRunUpdateDryRunSummaryDoesNotClaimFilesWereWritten guards against a
-// real bug this feature shipped with once: -dry-run must never print
-// "updated X" when X was never actually touched on disk.
+// TestRunUpdateDryRunSummaryDoesNotClaimFilesWereWritten: -dry-run must
+// never print "updated X" when X was never touched on disk.
 func TestRunUpdateDryRunSummaryDoesNotClaimFilesWereWritten(t *testing.T) {
 	dir := newUpdateFixture(t)
 

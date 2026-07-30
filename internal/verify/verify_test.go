@@ -46,13 +46,10 @@ func newFixtureRepo(t *testing.T) string {
 	return dir
 }
 
-// TestRunEndToEnd exercises the full concurrent extraction path against a
-// real fixture repo, covering all three verdicts in one pass: PASS (test
-// count and coverage, both learned from the real extractors so the
-// expectation can't drift out of sync with them), BREACH (a LOC claim
-// deliberately declared wrong), and ERROR (a coverage claim pointed at the
-// wrong language runner, which cannot produce a Python coverage report for
-// a Go-only repo).
+// TestRunEndToEnd covers all three verdicts in one pass: PASS (test count
+// and coverage, learned from the real extractors so expectations can't
+// drift), BREACH (a LOC claim declared wrong), and ERROR (a coverage claim
+// pointed at the wrong language runner).
 func TestRunEndToEnd(t *testing.T) {
 	dir := newFixtureRepo(t)
 	ctx := context.Background()
@@ -144,8 +141,8 @@ claims:
 	}
 }
 
-// TestRunUnknownClaimsFile confirms a missing/invalid claims.yaml surfaces
-// as an error from Run itself, rather than an empty report.
+// TestRunUnknownClaimsFile confirms a missing claims.yaml errors from Run
+// itself, rather than returning an empty report.
 func TestRunUnknownClaimsFile(t *testing.T) {
 	dir := t.TempDir()
 	if _, err := Run(context.Background(), dir, filepath.Join(dir, "does-not-exist.yaml")); err == nil {

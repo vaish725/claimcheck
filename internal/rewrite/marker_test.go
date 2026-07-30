@@ -54,9 +54,7 @@ func TestReplaceGolden(t *testing.T) {
 		values map[string]string
 	}{
 		{name: "simple", values: map[string]string{"test_count": "91"}},
-		// coverage is deliberately absent from values: its marker must be
-		// left untouched even though the file contains it.
-		{name: "multiple", values: map[string]string{"test_count": "91"}},
+		{name: "multiple", values: map[string]string{"test_count": "91"}}, // coverage absent: its marker must stay untouched
 		{name: "duplicate", values: map[string]string{"test_count": "91"}},
 		{name: "no_markers", values: map[string]string{"test_count": "91"}},
 	}
@@ -146,24 +144,22 @@ func TestReplaceLeavesUnknownMarkersUntouched(t *testing.T) {
 	}
 }
 
-// FuzzParse feeds arbitrary bytes to Parse, which must never panic. When it
-// does return markers successfully, their offsets must be in-bounds,
-// ordered, and non-overlapping - the fuzz target checks real invariants,
-// not just the absence of a crash. go test ./... runs only the seed corpus
-// below as ordinary regression tests; `go test -fuzz=FuzzParse` does actual
-// generative fuzzing on demand.
+// FuzzParse feeds arbitrary bytes to Parse, which must never panic, and
+// checks that any returned markers are in-bounds, ordered, and
+// non-overlapping. `go test ./...` runs only the seeds below; `go test
+// -fuzz=FuzzParse` does real generative fuzzing.
 func FuzzParse(f *testing.F) {
 	seeds := []string{
 		"",
 		"plain text, no markers at all",
 		"<!-- claimcheck:a -->1<!-- /claimcheck:a -->",
-		"before <!-- claimcheck:a -->42 no close tag after",                                                     // unterminated
-		"<!-- claimcheck:a --><!-- claimcheck:b -->1<!-- /claimcheck:b --><!-- /claimcheck:a -->",                // nested
-		"<!-- claimcheck:a -->1<!-- /claimcheck:b -->",                                                          // mismatched close
-		"text <!-- /claimcheck:a --> more text",                                                                 // orphaned close
-		"<!--claimcheck:a-->x<!--/claimcheck:a-->",                                                              // no interior whitespace
-		"stray fragments: <!-- and --> claimcheck: and -->",                                                     // look-alikes that shouldn't match
-		"unicode content: éèê <!-- claimcheck:é -->1<!-- /claimcheck:é -->",             // non-ASCII id, won't match the id charset
+		"before <!-- claimcheck:a -->42 no close tag after",                                       // unterminated
+		"<!-- claimcheck:a --><!-- claimcheck:b -->1<!-- /claimcheck:b --><!-- /claimcheck:a -->", // nested
+		"<!-- claimcheck:a -->1<!-- /claimcheck:b -->",                                            // mismatched close
+		"text <!-- /claimcheck:a --> more text",                                                   // orphaned close
+		"<!--claimcheck:a-->x<!--/claimcheck:a-->",                                                // no interior whitespace
+		"stray fragments: <!-- and --> claimcheck: and -->",                                       // look-alikes that shouldn't match
+		"unicode content: éèê <!-- claimcheck:é -->1<!-- /claimcheck:é -->",                       // non-ASCII id, won't match the id charset
 	}
 	for _, s := range seeds {
 		f.Add(s)
@@ -187,9 +183,7 @@ func FuzzParse(f *testing.F) {
 			prevEnd = mk.ContentEnd
 		}
 
-		// Replace must also never panic, and with an empty values map it
-		// must be a byte-for-byte no-op.
-		out, err := Replace(content, nil)
+		out, err := Replace(content, nil) // must never panic; nil values is a no-op
 		if err != nil {
 			t.Fatalf("Replace returned an error after Parse succeeded: %v", err)
 		}

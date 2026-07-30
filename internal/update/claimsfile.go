@@ -8,18 +8,13 @@ import (
 	"github.com/vaish725/claimcheck/internal/rewrite"
 )
 
-// locateDeclaredSpans decodes raw claims.yaml bytes into a yaml.Node tree
-// purely to find exactly where each claim's "declared" scalar sits in the
-// original text - the tree's Line/Column fields point precisely at where
-// a scalar's raw text begins, so no re-encoding or line-scoped searching
-// is needed. Every byte outside the returned spans - comments, key order,
-// indentation, quoting - is left completely alone by whatever rewrites
-// these spans, the same guarantee the marker rewriter gives READMEs.
+// locateDeclaredSpans decodes raw claims.yaml into a yaml.Node tree to find
+// exactly where each claim's "declared" scalar sits in the original text,
+// via the node's Line/Column - no re-encoding needed, so every other byte
+// (comments, key order, indentation) stays untouched.
 //
-// Declared values must be written as bare (unquoted) YAML numbers; that is
-// what every claims.yaml example and R2's extractors produce, and it's
-// what makes a span's byte length equal to len(node.Value) with no
-// unescaping required.
+// Declared values must be bare (unquoted) YAML numbers, so a span's byte
+// length equals len(node.Value) with no unescaping required.
 func locateDeclaredSpans(raw []byte) ([]rewrite.Span, error) {
 	var doc yaml.Node
 	if err := yaml.Unmarshal(raw, &doc); err != nil {
@@ -59,9 +54,8 @@ func locateDeclaredSpans(raw []byte) ([]rewrite.Span, error) {
 	return spans, nil
 }
 
-// findMapValue returns the value node for key in a mapping node's flat
-// [key1, value1, key2, value2, ...] Content slice, or nil if the mapping
-// or the key is absent.
+// findMapValue returns key's value node from a mapping's flat
+// [key1, value1, ...] Content slice, or nil if absent.
 func findMapValue(mapNode *yaml.Node, key string) *yaml.Node {
 	if mapNode == nil || mapNode.Kind != yaml.MappingNode {
 		return nil
@@ -74,9 +68,8 @@ func findMapValue(mapNode *yaml.Node, key string) *yaml.Node {
 	return nil
 }
 
-// computeLineStartOffsets returns, for each 1-indexed line number, the
-// byte offset in raw where that line begins. Index 0 is unused so that
-// lineStarts[n] directly answers "where does line n start".
+// computeLineStartOffsets maps each 1-indexed line number to its byte
+// offset in raw; index 0 is unused.
 func computeLineStartOffsets(raw []byte) []int {
 	starts := []int{0, 0} // line 1 starts at offset 0
 	for i, b := range raw {
@@ -87,9 +80,8 @@ func computeLineStartOffsets(raw []byte) []int {
 	return starts
 }
 
-// byteOffset converts a yaml.Node's 1-indexed (line, column) - column
-// being a rune count from the start of the line, per yaml.v3 - into a byte
-// offset into raw.
+// byteOffset converts a yaml.Node's 1-indexed (line, column) - column is a
+// rune count from line start, per yaml.v3 - into a byte offset into raw.
 func byteOffset(raw []byte, lineStarts []int, line, column int) (int, error) {
 	if line <= 0 || line >= len(lineStarts) {
 		return 0, fmt.Errorf("line %d out of range", line)

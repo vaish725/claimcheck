@@ -13,10 +13,8 @@ import (
 	"github.com/vaish725/claimcheck/internal/schema"
 )
 
-// pytestCountExtractor recomputes a test_count claim for a Python repo by
-// running pytest with a JUnit XML report and summing the "tests" attribute
-// across every <testsuite> element. JUnit XML is pytest's built-in report
-// format, so this needs no extra plugin installed in the target repo.
+// pytestCountExtractor counts a Python repo's tests via pytest's built-in
+// JUnit XML report, so no extra plugin is required in the target repo.
 type pytestCountExtractor struct{}
 
 func (pytestCountExtractor) Extract(ctx context.Context, repoPath string, _ schema.Claim) (float64, error) {
@@ -35,7 +33,7 @@ func (pytestCountExtractor) Extract(ctx context.Context, repoPath string, _ sche
 		if _, isExitErr := err.(*exec.ExitError); !isExitErr {
 			return 0, fmt.Errorf("running pytest: %w: %s", err, stderr.String())
 		}
-		// a non-zero exit from failing tests still leaves a valid report.
+		// failing tests still leave a valid report
 	}
 
 	data, err := os.ReadFile(reportPath)
@@ -50,9 +48,8 @@ func (pytestCountExtractor) Extract(ctx context.Context, repoPath string, _ sche
 }
 
 // parseJUnitTestCount sums the "tests" attribute of every <testsuite>
-// element, handling both a bare <testsuite> root (older pytest) and a
-// <testsuites> root wrapping one or more <testsuite> children (current
-// pytest).
+// element, handling both a bare <testsuite> root and a <testsuites> root
+// wrapping several.
 func parseJUnitTestCount(data []byte) (int, error) {
 	dec := xml.NewDecoder(bytes.NewReader(data))
 	total := 0
@@ -87,9 +84,8 @@ func parseJUnitTestCount(data []byte) (int, error) {
 	return total, nil
 }
 
-// pytestCoverageExtractor recomputes a coverage claim for a Python repo by
-// running the suite under coverage.py and reading the aggregate line-rate
-// out of coverage's own XML report.
+// pytestCoverageExtractor recomputes coverage via coverage.py's aggregate
+// line-rate from its own XML report.
 type pytestCoverageExtractor struct{}
 
 func (pytestCoverageExtractor) Extract(ctx context.Context, repoPath string, claim schema.Claim) (float64, error) {
@@ -106,8 +102,7 @@ func (pytestCoverageExtractor) Extract(ctx context.Context, repoPath string, cla
 	defer cleanupXML()
 
 	// COVERAGE_FILE keeps coverage.py's data file out of the target repo's
-	// working tree entirely, so running claimcheck never leaves stray
-	// build artifacts behind for the user to clean up or accidentally commit.
+	// working tree, so claimcheck leaves no stray build artifacts behind.
 	env := append(os.Environ(), "COVERAGE_FILE="+dataPath)
 
 	runCmd := exec.CommandContext(ctx, "python3", "-m", "coverage", "run", "-m", "pytest", "-q")
@@ -143,8 +138,8 @@ func (pytestCoverageExtractor) Extract(ctx context.Context, repoPath string, cla
 	return pct, nil
 }
 
-// coverageXMLRoot models the attributes coverage.py writes on the root
-// <coverage> element of its Cobertura-style XML report.
+// coverageXMLRoot models the root <coverage> element of coverage.py's
+// Cobertura-style XML report.
 type coverageXMLRoot struct {
 	XMLName  xml.Name `xml:"coverage"`
 	LineRate float64  `xml:"line-rate,attr"`
@@ -160,10 +155,8 @@ func parseCoverageXML(data []byte) (float64, error) {
 	return root.LineRate * 100, nil
 }
 
-// tempFilePath reserves a unique path matching pattern without leaving the
-// zero-byte placeholder file behind for tools (pytest, coverage) that
-// insist on creating the file themselves. The returned cleanup func must be
-// deferred by the caller to remove whatever ends up at that path.
+// tempFilePath reserves a unique path matching pattern, for tools that
+// insist on creating the file themselves. Caller must defer cleanup.
 func tempFilePath(pattern string) (path string, cleanup func(), err error) {
 	f, err := os.CreateTemp("", pattern)
 	if err != nil {

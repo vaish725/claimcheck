@@ -62,19 +62,14 @@ func TestWriteFileAtomicSetsPermissions(t *testing.T) {
 
 func TestWriteFileAtomicCleansUpOnFailure(t *testing.T) {
 	dir := t.TempDir()
-	// A target path inside a directory that doesn't exist means the final
-	// rename must fail, since CreateTemp still succeeds in dir itself.
-	badPath := filepath.Join(dir, "no-such-subdir", "README.md")
+	badPath := filepath.Join(dir, "no-such-subdir", "README.md") // rename into a nonexistent dir must fail
 
 	err := WriteFileAtomic(badPath, []byte("hello"), 0o644)
 	if err == nil {
 		t.Fatal("expected an error for a rename into a nonexistent directory, got none")
 	}
 
-	// os.Rename fails without creating "no-such-subdir", so dir should be
-	// left exactly as it was: the temp file WriteFileAtomic created must
-	// have been cleaned up on this failure path.
-	entries, readErr := os.ReadDir(dir)
+	entries, readErr := os.ReadDir(dir) // the temp file WriteFileAtomic created must be cleaned up
 	if readErr != nil {
 		t.Fatalf("reading temp dir: %v", readErr)
 	}

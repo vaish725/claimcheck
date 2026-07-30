@@ -1,7 +1,5 @@
-// Package update recomputes every claim in a repo's claims.yaml and
-// rewrites both claims.yaml's declared values and every marked span in the
-// files each claim's asserted_in lists, so refreshing a README or resume's
-// numbers is one command instead of manual, repo-by-repo editing.
+// Package update recomputes every claim and rewrites claims.yaml's
+// declared values plus every marked span in each claim's asserted_in files.
 package update
 
 import (
@@ -19,31 +17,28 @@ import (
 	"github.com/vaish725/claimcheck/internal/verify"
 )
 
-// resumeTarget is the reserved asserted_in entry standing in for the
-// future cross-repo résumé mode. It names no file in this repo, so update
-// never tries to open or rewrite it.
+// resumeTarget is the reserved asserted_in entry for the future cross-repo
+// résumé mode; it names no file, so update never tries to open it.
 const resumeTarget = "resume"
 
-// Change is one claim's before/after value. Err is set if the claim's
-// actual value could not be recomputed, in which case NewValue is
-// meaningless and the claim is left untouched everywhere - a value update
-// can't safely compute is a value update skips, not guesses at.
+// Change is one claim's before/after value. Err is set if the actual value
+// couldn't be recomputed, in which case NewValue is meaningless and the
+// claim is left untouched everywhere.
 type Change struct {
 	Claim    schema.Claim // Claim.Declared is the OLD value
 	NewValue float64
 	Err      error
 }
 
-// FileChange is the before/after content of one rewritten file: either
-// claims.yaml itself, or a file some claim's asserted_in lists.
+// FileChange is the before/after content of one rewritten file.
 type FileChange struct {
 	Path             string
 	OldData, NewData []byte
 }
 
-// Plan is the full result of recomputing every claim and computing what
+// Plan is the result of recomputing every claim and computing what
 // claims.yaml and every asserted_in file would look like afterward.
-// Building a Plan never writes anything to disk.
+// Building a Plan never writes to disk.
 type Plan struct {
 	Changes []Change
 	Files   []FileChange
@@ -52,8 +47,7 @@ type Plan struct {
 // Changed reports whether applying this plan would modify anything on disk.
 func (p *Plan) Changed() bool { return len(p.Files) > 0 }
 
-// Failed reports whether any claim's actual value could not be
-// recomputed, meaning this plan is incomplete.
+// Failed reports whether any claim's actual value could not be recomputed.
 func (p *Plan) Failed() bool {
 	for _, c := range p.Changes {
 		if c.Err != nil {
@@ -63,10 +57,9 @@ func (p *Plan) Failed() bool {
 	return false
 }
 
-// BuildPlan recomputes every claim declared in claimsPath, reusing the
-// same concurrent extraction verify.Run uses, and computes the new
-// contents of claims.yaml and every file its claims' asserted_in lists.
-// It does not write anything to disk; call Apply for that.
+// BuildPlan recomputes every claim (reusing verify.Run's extraction) and
+// computes the new contents of claims.yaml and every asserted_in file,
+// without writing to disk; call Apply for that.
 func BuildPlan(ctx context.Context, repoPath, claimsPath string) (*Plan, error) {
 	rep, err := verify.Run(ctx, repoPath, claimsPath)
 	if err != nil {
@@ -118,8 +111,7 @@ func BuildPlan(ctx context.Context, repoPath, claimsPath string) (*Plan, error) 
 		plan.Files = append(plan.Files, FileChange{Path: claimsPath, OldData: rawClaims, NewData: newClaims})
 	}
 
-	// Sorted so Plan.Files (and therefore Write's output) is deterministic
-	// rather than following Go's randomized map iteration order.
+	// sorted for deterministic Plan.Files / Write output
 	targets := make([]string, 0, len(markerValuesByFile))
 	for target := range markerValuesByFile {
 		targets = append(targets, target)
@@ -159,11 +151,9 @@ func Apply(plan *Plan) error {
 	return nil
 }
 
-// Write renders a human-readable summary of the plan: one line per claim
-// (old -> new, unchanged, or error), followed by which files were changed.
-// applied must reflect whether Apply was actually called - Write has no
-// other way to know, and printing "updated" for a dry run that wrote
-// nothing would be actively misleading.
+// Write renders a summary: one line per claim (old -> new, unchanged, or
+// error), then which files changed. applied must reflect whether Apply
+// was actually called, or a dry run would misleadingly say "updated".
 func (p *Plan) Write(w io.Writer, applied bool) error {
 	for _, c := range p.Changes {
 		var line string

@@ -62,8 +62,7 @@ func TestReportBreached(t *testing.T) {
 }
 
 func TestReportWriteAvoidsFloatNoise(t *testing.T) {
-	// 82.35 - 75 in float64 arithmetic is 7.349999999999994; the report
-	// must display "7.35", not that raw subtraction artifact.
+	// 82.35 - 75 in float64 is 7.349999999999994; must display as "7.35"
 	claim := schema.Claim{ID: "coverage", Declared: 75, Tolerance: "+-10%", ParsedTolerance: mustTolerance(t, "+-10%")}
 	r := Report{Rows: []Row{NewRow(claim, 82.35, nil)}}
 

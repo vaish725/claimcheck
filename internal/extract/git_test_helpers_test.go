@@ -7,9 +7,8 @@ import (
 	"testing"
 )
 
-// runGit runs a git command in dir, failing the test on error. It pins a
-// throwaway identity via -c flags so commits work in CI environments with
-// no global git config.
+// runGit runs a git command in dir, failing the test on error, with a
+// throwaway identity so commits work without global git config.
 func runGit(t *testing.T, dir string, args ...string) {
 	t.Helper()
 	base := []string{"-c", "user.name=claimcheck-test", "-c", "user.email=test@example.com"}

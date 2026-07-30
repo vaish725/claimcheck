@@ -30,8 +30,7 @@ func TestParseJUnitTestCount(t *testing.T) {
 }
 
 func TestParseJUnitTestCountBareTestsuite(t *testing.T) {
-	// Older pytest/unittest runners emit a bare <testsuite> with no
-	// wrapping <testsuites> element.
+	// older runners emit a bare <testsuite> with no wrapping <testsuites>
 	fixture := `<testsuite name="pytest" tests="5" errors="0" failures="0" skipped="0"></testsuite>`
 
 	got, err := parseJUnitTestCount([]byte(fixture))
@@ -70,10 +69,8 @@ func TestParseCoverageXMLWrongRoot(t *testing.T) {
 	}
 }
 
-// TestPythonExtractorsAgainstFixtureProject runs both Python extractors for
-// real against testdata/pyproject, which has three passing tests and one
-// deliberately untested function (div), exercising the full pytest /
-// coverage.py subprocess path.
+// TestPythonExtractorsAgainstFixtureProject runs both extractors for real
+// against testdata/pyproject, exercising the full pytest/coverage.py path.
 func TestPythonExtractorsAgainstFixtureProject(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -92,9 +89,7 @@ func TestPythonExtractorsAgainstFixtureProject(t *testing.T) {
 	if err != nil {
 		t.Fatalf("pytestCoverageExtractor.Extract: %v", err)
 	}
-	// div() is untested, so coverage should be short of 100% but well
-	// above zero (add/sub/mul are fully exercised).
-	if pct <= 0 || pct >= 100 {
+	if pct <= 0 || pct >= 100 { // div() is untested; add/sub/mul are fully covered
 		t.Errorf("coverage = %v%%, want a value strictly between 0 and 100", pct)
 	}
 }

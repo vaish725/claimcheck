@@ -16,14 +16,9 @@ import (
 type Verdict int
 
 const (
-	// Pass means the actual value fell within the claim's tolerance.
-	Pass Verdict = iota
-	// Breach means extraction succeeded but the actual value fell outside
-	// tolerance: the claim has drifted.
-	Breach
-	// Error means the actual value could not be determined at all. This is
-	// always reported loudly and never silently treated as zero or as a pass.
-	Error
+	Pass   Verdict = iota // actual fell within tolerance
+	Breach                // extraction succeeded but actual fell outside tolerance
+	Error                 // actual could not be determined at all
 )
 
 func (v Verdict) String() string {
@@ -47,9 +42,8 @@ type Row struct {
 	Verdict Verdict
 }
 
-// NewRow compares a claim's declared value against its freshly extracted
-// actual value (or the error that prevented extraction) and produces the
-// row that should appear in the drift report.
+// NewRow compares a claim's declared value against its extracted actual
+// value (or extraction error) and produces the resulting row.
 func NewRow(claim schema.Claim, actual float64, extractErr error) Row {
 	if extractErr != nil {
 		return Row{Claim: claim, Err: extractErr, Verdict: Error}
@@ -67,9 +61,7 @@ type Report struct {
 	Rows []Row
 }
 
-// Breached reports whether any claim failed to pass, either because it
-// drifted beyond tolerance or because it could not be extracted. This is
-// what `claimcheck verify` uses to decide its exit code.
+// Breached reports whether any claim drifted beyond tolerance or failed to extract.
 func (r Report) Breached() bool {
 	for _, row := range r.Rows {
 		if row.Verdict != Pass {
@@ -109,13 +101,9 @@ func (r Report) Write(w io.Writer) error {
 	return tw.Flush()
 }
 
-// FormatFloat rounds to 4 decimal places (enough to preserve any real
-// precision a claim cares about) before trimming trailing zeros, so
-// "88.0" prints as "88" and "76.8" prints as "76.8" rather than the
-// float64 rounding noise that plain subtraction can introduce (e.g.
-// "7.349999999999994" instead of "7.35"). Exported so the update package
-// can format the same values it writes back into claims.yaml and marked
-// spans exactly as the drift report would show them.
+// FormatFloat rounds to 4 decimal places and trims trailing zeros, so
+// "88.0" prints as "88" and float subtraction noise like
+// "7.349999999999994" prints as "7.35". Exported for update to reuse.
 func FormatFloat(f float64) string {
 	rounded := math.Round(f*1e4) / 1e4
 	return strconv.FormatFloat(rounded, 'f', -1, 64)

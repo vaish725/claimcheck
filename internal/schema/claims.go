@@ -26,9 +26,8 @@ const (
 	RunnerPytest Runner = "pytest"
 )
 
-// Claim is a single declared, checkable fact about a repo, as written in
-// claims.yaml. Every field the extractors need to recompute the claim lives
-// here so a claim is self-contained and portable between repos.
+// Claim is one declared, checkable fact about a repo, as written in
+// claims.yaml.
 type Claim struct {
 	ID         string    `yaml:"id"`
 	Type       ClaimType `yaml:"type"`
@@ -38,9 +37,7 @@ type Claim struct {
 	Tolerance  string    `yaml:"tolerance"`
 	AssertedIn []string  `yaml:"asserted_in,omitempty"`
 
-	// ParsedTolerance is populated by Validate and is what verify/report
-	// code should read; the raw Tolerance string above is only the
-	// on-disk representation.
+	// ParsedTolerance is set by Validate; callers should read this, not Tolerance.
 	ParsedTolerance Tolerance `yaml:"-"`
 }
 
@@ -50,10 +47,7 @@ type ClaimsFile struct {
 	Claims []Claim `yaml:"claims"`
 }
 
-// Load reads and parses a claims.yaml file from path, then validates it.
-// Validation failures are returned as an error rather than partially
-// loaded data, since an invalid claim (e.g. missing tolerance) has no
-// sensible fallback behavior.
+// Load reads, parses, and validates a claims.yaml file at path.
 func Load(path string) (*ClaimsFile, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -72,9 +66,8 @@ func Load(path string) (*ClaimsFile, error) {
 	return &cf, nil
 }
 
-// Validate checks that every claim declares the fields it needs to be
-// checkable, and parses each claim's tolerance string. It mutates each
-// Claim's ParsedTolerance field on success.
+// Validate checks every claim has the fields it needs to be checkable and
+// parses each claim's tolerance into ParsedTolerance.
 func (cf *ClaimsFile) Validate() error {
 	if len(cf.Claims) == 0 {
 		return fmt.Errorf("claims.yaml declares no claims")

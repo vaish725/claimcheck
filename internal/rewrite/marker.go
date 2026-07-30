@@ -1,8 +1,5 @@
-// Package rewrite edits numeric spans inside README/LaTeX-style text files
-// without disturbing any of the surrounding bytes, and writes the result
-// back to disk atomically. It has no knowledge of claims.yaml or of
-// claimcheck's CLI; it is purely "find these marked spans, replace their
-// contents, write safely".
+// Package rewrite edits marked spans inside text files without disturbing
+// surrounding bytes, and writes the result back atomically.
 package rewrite
 
 import (
@@ -11,34 +8,31 @@ import (
 	"sort"
 )
 
-// Marker is one <!-- claimcheck:ID --> ... <!-- /claimcheck:ID --> span
-// found in a file. ContentStart and ContentEnd are byte offsets into the
-// original content, delimiting the text between the open and close tags
-// (the tags themselves are not included).
+// Marker is one <!-- claimcheck:ID --> ... <!-- /claimcheck:ID --> span.
+// ContentStart/ContentEnd are byte offsets of the text between the tags,
+// excluding the tags themselves.
 type Marker struct {
 	ID           string
 	ContentStart int
 	ContentEnd   int
 }
 
-// tokenPattern matches both an open tag (<!-- claimcheck:ID -->) and a
-// close tag (<!-- /claimcheck:ID -->) in a single pass. Group 1 is "/" for
-// a close tag and empty for an open tag; group 2 is the marker id.
+// tokenPattern matches both open and close tags in one pass. Group 1 is
+// "/" for a close tag, empty for an open tag; group 2 is the marker id.
 var tokenPattern = regexp.MustCompile(`<!--\s*(/?)claimcheck:([A-Za-z0-9_-]+)\s*-->`)
 
-// openMarker tracks a tag while scanning that is waiting for its close, so
-// error messages can point back at where the still-open marker started.
+// openMarker tracks a tag awaiting its close, so errors can point back at
+// where the still-open marker started.
 type openMarker struct {
 	id           string
 	contentStart int
 	tagStart     int
 }
 
-// Parse scans content for well-formed claimcheck marker pairs, in the
-// order they appear. It returns an error on the first malformed marker it
-// finds - unterminated, nested, or a mismatched/orphaned close tag -
-// rather than silently ignoring the problem or guessing at intent:
-// mangling a README is worse than refusing to touch it.
+// Parse scans content for well-formed marker pairs, in order. It errors on
+// the first malformed marker - unterminated, nested, or a
+// mismatched/orphaned close - rather than guessing: mangling a file is
+// worse than refusing to touch it.
 func Parse(content []byte) ([]Marker, error) {
 	matches := tokenPattern.FindAllSubmatchIndex(content, -1)
 
@@ -92,12 +86,10 @@ func Replace(content []byte, values map[string]string) ([]byte, error) {
 	return ReplaceSpans(content, spans, values)
 }
 
-// Span is a byte range [Start, End) in some content, identified by ID, to
-// be replaced. Markers are one way to find spans (tag-delimited, in a
-// README or similar); other callers - such as the update package locating
-// claims.yaml's "declared:" scalars via a YAML node walk - find spans a
-// different way but get the same byte-splice-and-atomic-write guarantee
-// by going through this same primitive.
+// Span is a byte range [Start, End) in some content, identified by ID.
+// Markers are one way to find spans; other callers (e.g. update, locating
+// claims.yaml scalars via a YAML node walk) find them differently but
+// share this same splice primitive.
 type Span struct {
 	ID         string
 	Start, End int

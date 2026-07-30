@@ -6,14 +6,9 @@ import (
 	"path/filepath"
 )
 
-// WriteFileAtomic writes data to path by writing a temp file in path's own
-// directory and renaming it into place, so a crash, interrupt, or full
-// disk mid-write never leaves path partially written or corrupted: the
-// rename is the only step that can make the new content visible, and
-// rename within a single directory is atomic on every platform Go
-// supports. The caller supplies perm (e.g. from stat'ing the file being
-// replaced) since this function has no opinion about what the file's mode
-// should be.
+// WriteFileAtomic writes data to path via a same-directory temp file plus
+// rename, so a crash or interrupt mid-write never leaves path corrupted.
+// Caller supplies perm (e.g. from stat'ing the file being replaced).
 func WriteFileAtomic(path string, data []byte, perm os.FileMode) (err error) {
 	dir := filepath.Dir(path)
 
@@ -32,9 +27,7 @@ func WriteFileAtomic(path string, data []byte, perm os.FileMode) (err error) {
 	if _, err = tmp.Write(data); err != nil {
 		return fmt.Errorf("writing temp file: %w", err)
 	}
-	// Flush to disk before the rename, so the rename can't make a path
-	// visible that points at data the OS hasn't actually persisted yet.
-	if err = tmp.Sync(); err != nil {
+	if err = tmp.Sync(); err != nil { // flush before rename so the visible path always has persisted data
 		return fmt.Errorf("syncing temp file: %w", err)
 	}
 	if err = tmp.Close(); err != nil {

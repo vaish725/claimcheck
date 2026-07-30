@@ -12,13 +12,9 @@ import (
 type Kind int
 
 const (
-	// Exact means the actual value must equal the declared value precisely.
-	Exact Kind = iota
-	// Absolute means the actual value may differ from declared by at most Value.
-	Absolute
-	// Relative means the actual value may differ from declared by at most
-	// Value percent of the declared value.
-	Relative
+	Exact    Kind = iota // actual must equal declared precisely
+	Absolute             // actual may differ from declared by at most Value
+	Relative             // actual may differ from declared by at most Value percent
 )
 
 // Tolerance is the parsed form of a claim's "tolerance" field, e.g.
@@ -28,10 +24,9 @@ type Tolerance struct {
 	Value float64 // unused when Kind is Exact
 }
 
-// ParseTolerance parses the human-written tolerance string from claims.yaml.
-// Tolerance is mandatory by design: a claim with no stated tolerance is a
-// claim with no stated definition of "still true", so an empty or malformed
-// string is always an error rather than a silent default.
+// ParseTolerance parses the tolerance string from claims.yaml. There is no
+// default: an empty or malformed string is always an error, since a claim
+// with no stated tolerance has no definition of "still true".
 func ParseTolerance(raw string) (Tolerance, error) {
 	s := strings.TrimSpace(raw)
 	if s == "" {
@@ -42,9 +37,7 @@ func ParseTolerance(raw string) (Tolerance, error) {
 		return Tolerance{Kind: Exact}, nil
 	}
 
-	// Accept both the "+-" ASCII plus-minus sign and a leading "+/-" or "+-"
-	// spelled out, since not every keyboard/editor makes typing the
-	// plus-minus sign easy.
+	// Accept "+-" and "+/-" as ASCII stand-ins for "±".
 	body := s
 	for _, prefix := range []string{"±", "+/-", "+-"} {
 		if strings.HasPrefix(body, prefix) {
@@ -91,8 +84,7 @@ func (t Tolerance) Within(declared, actual float64) bool {
 	}
 }
 
-// String renders the tolerance back into its claims.yaml form, used by the
-// drift report and by `claimcheck update` when rewriting declared values.
+// String renders the tolerance back into its claims.yaml form.
 func (t Tolerance) String() string {
 	switch t.Kind {
 	case Exact:
@@ -114,8 +106,7 @@ func diff(a, b float64) float64 {
 	return d
 }
 
-// trimFloat formats a float without a trailing ".0" for whole numbers, so
-// "+-5" round-trips as "+-5" rather than "+-5.000000".
+// trimFloat drops a trailing ".0" so "+-5" round-trips as "+-5".
 func trimFloat(f float64) string {
 	return strconv.FormatFloat(f, 'f', -1, 64)
 }

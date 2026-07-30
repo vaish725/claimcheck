@@ -9,12 +9,10 @@ import (
 	"testing"
 )
 
-// newFixtureRepo creates a tiny, fully-covered Go module in a fresh git
-// repo, plus a claims.yaml (with declared values deliberately wrong, and a
-// comment that must survive any rewrite) and a README.md with a marker
-// for the test_count claim only. The coverage claim asserts itself in
-// both README.md and the reserved "resume" placeholder, so BuildPlan must
-// skip "resume" without trying to open it as a file.
+// newFixtureRepo creates a fully-covered Go module in a git repo, plus a
+// claims.yaml (declared values deliberately wrong, with a comment that
+// must survive) and a README with a test_count marker. coverage asserts
+// itself in both README.md and "resume", to check "resume" is skipped.
 func newFixtureRepo(t *testing.T) (dir, claimsPath string) {
 	t.Helper()
 	dir = t.TempDir()
@@ -128,8 +126,7 @@ func TestBuildPlanAndApplyEndToEnd(t *testing.T) {
 		t.Errorf("README.md rewrite = %q, want %q", readmeChange.NewData, wantReadme)
 	}
 
-	// BuildPlan alone must not have touched disk.
-	onDisk, err := os.ReadFile(claimsPath)
+	onDisk, err := os.ReadFile(claimsPath) // BuildPlan alone must not touch disk
 	if err != nil {
 		t.Fatalf("reading claims.yaml: %v", err)
 	}
@@ -156,9 +153,7 @@ func TestBuildPlanAndApplyEndToEnd(t *testing.T) {
 		t.Errorf("README.md on disk after Apply does not match the planned content")
 	}
 
-	// A second BuildPlan, now that declared values match reality, should
-	// report nothing left to change.
-	plan2, err := BuildPlan(ctx, dir, claimsPath)
+	plan2, err := BuildPlan(ctx, dir, claimsPath) // now idempotent: nothing left to change
 	if err != nil {
 		t.Fatalf("second BuildPlan: %v", err)
 	}
@@ -232,9 +227,7 @@ claims:
 	if plan.Failed() {
 		t.Fatalf("Plan.Failed() = true: %+v", plan.Changes)
 	}
-	// claims.yaml itself is the only file that should have changed; there
-	// is no real file named "resume" to have been touched.
-	for _, fc := range plan.Files {
+	for _, fc := range plan.Files { // only claims.yaml should have changed; "resume" names no real file
 		if fc.Path == "resume" || strings.HasSuffix(fc.Path, string(os.PathSeparator)+"resume") {
 			t.Errorf("plan attempted to rewrite a file for the reserved \"resume\" target: %s", fc.Path)
 		}

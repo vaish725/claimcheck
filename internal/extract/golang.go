@@ -14,17 +14,13 @@ import (
 	"github.com/vaish725/claimcheck/internal/schema"
 )
 
-// goTestEvent mirrors the subset of `go test -json` event fields this
-// package cares about. The full schema has more fields (Package, Elapsed,
-// Output, ...) that are irrelevant to counting tests.
+// goTestEvent is the subset of a `go test -json` event this package needs.
 type goTestEvent struct {
 	Action string `json:"Action"`
 	Test   string `json:"Test"`
 }
 
-// goTestCountExtractor recomputes a test_count claim for a Go repo by
-// running the test suite and counting distinct tests that reached a
-// terminal result.
+// goTestCountExtractor counts a Go repo's tests via `go test -json`.
 type goTestCountExtractor struct{}
 
 func (goTestCountExtractor) Extract(ctx context.Context, repoPath string, _ schema.Claim) (float64, error) {
@@ -40,10 +36,8 @@ func (goTestCountExtractor) Extract(ctx context.Context, repoPath string, _ sche
 }
 
 // runGoTestJSON runs `go test -json ./...` in repoPath and returns stdout.
-// A non-zero exit from failing tests is not treated as an extraction
-// failure: the JSON event stream is still complete and parseable, and
-// deciding whether failures matter is the tolerance's job, not this
-// extractor's.
+// Failing tests still produce a complete event stream, so a non-zero exit
+// alone is not treated as an extraction failure.
 func runGoTestJSON(ctx context.Context, repoPath string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "go", "test", "-json", "./...")
 	cmd.Dir = repoPath
@@ -59,9 +53,8 @@ func runGoTestJSON(ctx context.Context, repoPath string) ([]byte, error) {
 	return stdout.Bytes(), nil
 }
 
-// countGoTests counts distinct top-level tests (subtests, whose names
-// contain "/", are folded into their parent) that reached a pass, fail, or
-// skip action in a `go test -json` event stream.
+// countGoTests counts distinct top-level tests (subtests, named with "/",
+// fold into their parent) with a pass/fail/skip action.
 func countGoTests(output []byte) (int, error) {
 	seen := make(map[string]bool)
 	dec := json.NewDecoder(bytes.NewReader(output))
@@ -87,9 +80,8 @@ func countGoTests(output []byte) (int, error) {
 	return len(seen), nil
 }
 
-// goCoverageExtractor recomputes a coverage claim for a Go repo by running
-// the test suite with a coverage profile and reading the aggregate total
-// out of `go tool cover -func`.
+// goCoverageExtractor recomputes coverage for a Go repo via a coverage
+// profile and `go tool cover -func`'s aggregate total.
 type goCoverageExtractor struct{}
 
 func (goCoverageExtractor) Extract(ctx context.Context, repoPath string, claim schema.Claim) (float64, error) {
@@ -115,9 +107,8 @@ func (goCoverageExtractor) Extract(ctx context.Context, repoPath string, claim s
 	return pct, nil
 }
 
-// runGoCoverProfile runs `go test -coverprofile=<profilePath> ./...`. As
-// with test count, a failing-test exit code doesn't invalidate the
-// coverage profile that was still written.
+// runGoCoverProfile runs `go test -coverprofile=<profilePath> ./...`; a
+// failing-test exit code doesn't invalidate the profile that was written.
 func runGoCoverProfile(ctx context.Context, repoPath, profilePath string) error {
 	cmd := exec.CommandContext(ctx, "go", "test", "-coverprofile="+profilePath, "./...")
 	cmd.Dir = repoPath
@@ -154,9 +145,8 @@ func runGoToolCoverFunc(ctx context.Context, repoPath, profilePath string) ([]by
 	return stdout.Bytes(), nil
 }
 
-// parseCoverTotal extracts the percentage from the "total:" summary line
-// that `go tool cover -func` prints last, e.g.
-// "total:\t\t\t\t\t(statements)\t54.3%".
+// parseCoverTotal extracts the percentage from `go tool cover -func`'s
+// final "total:" line, e.g. "total:\t\t\t(statements)\t54.3%".
 func parseCoverTotal(output []byte) (float64, error) {
 	for _, line := range strings.Split(string(output), "\n") {
 		if !strings.HasPrefix(line, "total:") {

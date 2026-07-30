@@ -10,8 +10,7 @@ import (
 )
 
 func TestCountGoTests(t *testing.T) {
-	// A captured (trimmed) `go test -json` event stream: three top-level
-	// tests, one of which has a subtest that should not be double-counted.
+	// three top-level tests; one has a subtest that must not be double-counted
 	fixture := strings.Join([]string{
 		`{"Action":"run","Test":"TestAdd"}`,
 		`{"Action":"pass","Test":"TestAdd"}`,
@@ -59,11 +58,8 @@ func TestParseCoverTotalMissing(t *testing.T) {
 	}
 }
 
-// TestGoExtractorsAgainstFixtureProject runs both Go extractors for real
-// against testdata/goproject, which has three passing tests and one
-// deliberately untested function (Div), so this exercises the full
-// exec.CommandContext + go test -json / go tool cover path, not just the
-// parsing logic above.
+// TestGoExtractorsAgainstFixtureProject runs both extractors for real
+// against testdata/goproject, exercising the full subprocess path.
 func TestGoExtractorsAgainstFixtureProject(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -83,9 +79,7 @@ func TestGoExtractorsAgainstFixtureProject(t *testing.T) {
 	if err != nil {
 		t.Fatalf("goCoverageExtractor.Extract: %v", err)
 	}
-	// Div is untested, so coverage should be meaningfully short of 100%
-	// but still well above zero (Add/Sub/Mul are fully exercised).
-	if pct <= 0 || pct >= 100 {
+	if pct <= 0 || pct >= 100 { // Div is untested; Add/Sub/Mul are fully covered
 		t.Errorf("coverage = %v%%, want a value strictly between 0 and 100", pct)
 	}
 }

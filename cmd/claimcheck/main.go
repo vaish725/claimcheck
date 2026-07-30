@@ -1,6 +1,5 @@
-// Command claimcheck keeps numeric claims in a README or resume honest by
-// recomputing them from real repo state and failing when a claim has
-// drifted beyond its declared tolerance.
+// Command claimcheck keeps numeric README/resume claims honest by
+// recomputing them from repo state and failing on drift.
 package main
 
 import (
@@ -62,10 +61,9 @@ Flags for update:
 `)
 }
 
-// resolvePaths applies the shared repo-path/claims-path convention both
-// subcommands use: the first positional argument is the repo to inspect
-// (default "."), and claims.yaml lives at its root unless -claims points
-// elsewhere.
+// resolvePaths applies the shared convention: first positional arg is the
+// repo path (default "."), claims.yaml lives at its root unless -claims
+// overrides it.
 func resolvePaths(fs *flag.FlagSet, claimsFlag string) (repoPath, claimsPath string) {
 	repoPath = "."
 	if fs.NArg() > 0 {
@@ -78,10 +76,8 @@ func resolvePaths(fs *flag.FlagSet, claimsFlag string) (repoPath, claimsPath str
 	return repoPath, claimsPath
 }
 
-// runVerify implements the `claimcheck verify` subcommand: load claims.yaml,
-// recompute every claim, print the drift report, and translate the result
-// into an exit code. Non-zero on any breach or extraction error, unless
-// -soft was passed, in which case the report is informational only.
+// runVerify recomputes every claim and prints the drift report. Exits
+// non-zero on any breach or extraction error, unless -soft is set.
 func runVerify(args []string) int {
 	fs := flag.NewFlagSet("verify", flag.ContinueOnError)
 	claimsFlag := fs.String("claims", "", "path to claims.yaml (default \"<repo-path>/claims.yaml\")")
@@ -109,11 +105,9 @@ func runVerify(args []string) int {
 	return 0
 }
 
-// runUpdate implements the `claimcheck update` subcommand: recompute every
-// claim, print what changed (or would change), and rewrite claims.yaml and
-// every asserted-in file to match reality unless -dry-run was passed.
-// Non-zero if any claim's actual value couldn't be recomputed, since the
-// update is then incomplete regardless of what did get written.
+// runUpdate recomputes every claim and rewrites claims.yaml plus every
+// asserted-in file, unless -dry-run is set. Exits non-zero if any claim
+// failed to recompute, since the update is then incomplete.
 func runUpdate(args []string) int {
 	fs := flag.NewFlagSet("update", flag.ContinueOnError)
 	claimsFlag := fs.String("claims", "", "path to claims.yaml (default \"<repo-path>/claims.yaml\")")
