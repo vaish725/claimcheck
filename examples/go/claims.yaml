@@ -36,3 +36,12 @@ claims:
     declared: 26
     tolerance: "+-5"
     asserted_in: [resume]
+
+  - id: query_p50
+    type: benchmark
+    command: "go run ./cmd/bench --json"
+    field: p50_ms
+    declared: 0.09
+    machine: unset            # `claimcheck update` fills this in; never edit by hand
+    tolerance: "+-25%"        # wide band on purpose - benchmarks are machine-dependent
+    asserted_in: [resume]

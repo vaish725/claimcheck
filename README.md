@@ -101,8 +101,8 @@ Coverage: <!-- claimcheck:coverage -->54<!-- /claimcheck:coverage -->%.
 `update` never writes a partial file: each rewrite is a temp-file-plus-rename,
 so an interrupted run can't corrupt a source file, and comments and
 formatting elsewhere in `claims.yaml` are left exactly as they were - only
-the numeric `declared:` value itself changes. Declared values must be bare
-(unquoted) numbers for `update` to find them.
+the `declared:` (and, for benchmarks, `machine:`) values themselves change.
+Both must be written as bare (unquoted) scalars for `update` to find them.
 
 If any claim's actual value can't be recomputed, `update` still applies
 every claim it could and reports the failure, exiting non-zero so a
@@ -116,6 +116,33 @@ partial update doesn't look like a clean one.
 | `coverage` | `go` or `pytest` | aggregate line coverage percentage |
 | `loc` | none | lines across tracked and non-ignored files (`git ls-files`) |
 | `commit_count` | none | commits reachable from `HEAD` |
+| `benchmark` | none | one numeric field from a command's JSON stdout |
+
+A `benchmark` claim runs a shell `command` and reads one flat field out of
+its JSON output:
+
+```yaml
+- id: query_p50
+  type: benchmark
+  command: "python -m codesearch.bench --json"
+  field: p50_ms
+  declared: 0.09
+  machine: unset
+  tolerance: "+-25%"
+  asserted_in: [resume]
+```
+
+Benchmark numbers are machine-dependent, so they carry a `machine`
+fingerprint (OS/arch/core-count) and are **never compared across
+machines** - a claim declared on one machine reports `SKIP`, not a
+pass or a breach, when checked on another. Start a new benchmark claim
+with `machine: unset` (a real value can't be written by hand in advance);
+running `claimcheck update` on the machine whose numbers should be
+canonical establishes both `declared` and `machine` together. From then
+on, `update` refuses to touch that claim from any other machine, so a
+different laptop or CI runner can never silently overwrite your declared
+number - you have to run `update` on the original machine, or clear the
+`machine` field back to `unset` to deliberately adopt a new one.
 
 ## Tolerance
 
@@ -152,9 +179,9 @@ jobs:
 
 ## Status
 
-Test count, coverage, LOC, and commit count claims are implemented for Go
-and Python repos, with concurrent extraction and a per-claim timeout so a
-hung subprocess can't hang CI. `claimcheck verify` and `claimcheck update`
-(marker rewriting in README-style files, atomic writes) are both
-implemented. LaTeX span substitution, the benchmark extractor, and resume
-mode across multiple repos are not built yet.
+Test count, coverage, LOC, commit count, and benchmark claims are all
+implemented, with concurrent extraction and a per-claim timeout so a hung
+subprocess can't hang CI. `claimcheck verify` and `claimcheck update`
+(marker rewriting in README-style files, atomic writes, machine-fingerprint
+gating for benchmarks) are both implemented. LaTeX span substitution and
+resume mode across multiple repos are not built yet.

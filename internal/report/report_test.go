@@ -61,6 +61,76 @@ func TestReportBreached(t *testing.T) {
 	}
 }
 
+func TestNewRowBenchmarkSkipsOnMachineMismatch(t *testing.T) {
+	claim := schema.Claim{
+		ID: "query_p50", Type: schema.Benchmark, Declared: 0.09,
+		Machine:         "bogus-os/bogus-arch/0cpu", // guaranteed to differ from the real fingerprint
+		ParsedTolerance: mustTolerance(t, "+-25%"),
+	}
+	row := NewRow(claim, 5.0, nil) // wildly different value; must not be compared at all
+	if row.Verdict != Skip {
+		t.Errorf("Verdict = %v, want Skip", row.Verdict)
+	}
+	if row.Actual != 5.0 {
+		t.Errorf("Actual = %v, want 5.0 (still recorded even though not compared)", row.Actual)
+	}
+}
+
+func TestNewRowBenchmarkComparesNormallyWithoutRecordedMachine(t *testing.T) {
+	claim := schema.Claim{
+		ID: "query_p50", Type: schema.Benchmark, Declared: 0.09,
+		Machine:         "", // never recorded yet
+		ParsedTolerance: mustTolerance(t, "+-25%"),
+	}
+	row := NewRow(claim, 0.09, nil)
+	if row.Verdict != Pass {
+		t.Errorf("Verdict = %v, want Pass", row.Verdict)
+	}
+}
+
+func TestNewRowBenchmarkComparesNormallyOnMatchingMachine(t *testing.T) {
+	claim := schema.Claim{
+		ID: "query_p50", Type: schema.Benchmark, Declared: 0.09,
+		Machine:         schema.CurrentMachineFingerprint(),
+		ParsedTolerance: mustTolerance(t, "+-25%"),
+	}
+	row := NewRow(claim, 5.0, nil) // way outside tolerance
+	if row.Verdict != Breach {
+		t.Errorf("Verdict = %v, want Breach", row.Verdict)
+	}
+}
+
+func TestReportBreachedSkipIsNotABreach(t *testing.T) {
+	claim := schema.Claim{
+		ID: "query_p50", Type: schema.Benchmark, Declared: 0.09,
+		Machine: "bogus-os/bogus-arch/0cpu", ParsedTolerance: mustTolerance(t, "+-25%"),
+	}
+	r := Report{Rows: []Row{NewRow(claim, 5.0, nil)}}
+	if r.Breached() {
+		t.Error("Breached() = true for a Skip-only report, want false")
+	}
+}
+
+func TestReportWriteSkip(t *testing.T) {
+	claim := schema.Claim{
+		ID: "query_p50", Type: schema.Benchmark, Declared: 0.09,
+		Machine: "bogus-os/bogus-arch/0cpu", ParsedTolerance: mustTolerance(t, "+-25%"),
+	}
+	r := Report{Rows: []Row{NewRow(claim, 0.1, nil)}}
+
+	var buf strings.Builder
+	if err := r.Write(&buf); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	out := buf.String()
+
+	for _, want := range []string{"SKIP", "bogus-os/bogus-arch/0cpu", schema.CurrentMachineFingerprint()} {
+		if !strings.Contains(out, want) {
+			t.Errorf("report output missing %q; got:\n%s", want, out)
+		}
+	}
+}
+
 func TestReportWriteAvoidsFloatNoise(t *testing.T) {
 	// 82.35 - 75 in float64 is 7.349999999999994; must display as "7.35"
 	claim := schema.Claim{ID: "coverage", Declared: 75, Tolerance: "+-10%", ParsedTolerance: mustTolerance(t, "+-10%")}

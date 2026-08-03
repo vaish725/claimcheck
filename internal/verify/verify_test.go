@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/vaish725/claimcheck/internal/extract"
@@ -147,5 +148,52 @@ func TestRunUnknownClaimsFile(t *testing.T) {
 	dir := t.TempDir()
 	if _, err := Run(context.Background(), dir, filepath.Join(dir, "does-not-exist.yaml")); err == nil {
 		t.Fatal("expected error for missing claims.yaml, got none")
+	}
+}
+
+// TestRunBenchmarkClaim exercises a benchmark claim through the full
+// schema.Load -> extract.Lookup -> report.NewRow path: Pass when its
+// machine is unrecorded, Skip when it's declared on a different one.
+func TestRunBenchmarkClaim(t *testing.T) {
+	dir := t.TempDir()
+	claimsYAML := `
+repo: fixture
+claims:
+  - id: query_p50
+    type: benchmark
+    command: "echo '{\"p50_ms\": 0.09}'"
+    field: p50_ms
+    declared: 0.09
+    machine: unset
+    tolerance: "+-25%"
+    asserted_in: [resume]
+`
+	claimsPath := filepath.Join(dir, "claims.yaml")
+	if err := os.WriteFile(claimsPath, []byte(claimsYAML), 0o644); err != nil {
+		t.Fatalf("writing claims.yaml: %v", err)
+	}
+
+	rep, err := Run(context.Background(), dir, claimsPath)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(rep.Rows) != 1 || rep.Rows[0].Verdict != report.Pass {
+		t.Fatalf("verdict = %v, want Pass (unrecorded machine compares normally)", rep.Rows[0].Verdict)
+	}
+
+	// Now with a machine recorded as something other than this one.
+	mismatched := strings.Replace(claimsYAML, "machine: unset", "machine: bogus-os/bogus-arch/0cpu", 1)
+	if err := os.WriteFile(claimsPath, []byte(mismatched), 0o644); err != nil {
+		t.Fatalf("writing claims.yaml: %v", err)
+	}
+	rep2, err := Run(context.Background(), dir, claimsPath)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(rep2.Rows) != 1 || rep2.Rows[0].Verdict != report.Skip {
+		t.Fatalf("verdict = %v, want Skip (declared on a different machine)", rep2.Rows[0].Verdict)
+	}
+	if rep2.Breached() {
+		t.Error("Report.Breached() = true for a Skip-only report, want false")
 	}
 }

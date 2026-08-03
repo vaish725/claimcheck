@@ -19,6 +19,7 @@ const (
 	Pass   Verdict = iota // actual fell within tolerance
 	Breach                // extraction succeeded but actual fell outside tolerance
 	Error                 // actual could not be determined at all
+	Skip                  // benchmark claim declared on a different machine; not compared
 )
 
 func (v Verdict) String() string {
@@ -29,6 +30,8 @@ func (v Verdict) String() string {
 		return "BREACH"
 	case Error:
 		return "ERROR"
+	case Skip:
+		return "SKIP"
 	default:
 		return "UNKNOWN"
 	}
@@ -48,6 +51,14 @@ func NewRow(claim schema.Claim, actual float64, extractErr error) Row {
 	if extractErr != nil {
 		return Row{Claim: claim, Err: extractErr, Verdict: Error}
 	}
+	// A benchmark claim declared on a recorded machine other than this one
+	// is never compared - refused, not fudged, per the tolerance a number
+	// this machine-dependent can't otherwise be trusted across. A claim
+	// that has never been recorded (empty or UnsetMachine) compares
+	// normally, so `update` can establish it on the first run.
+	if claim.Type == schema.Benchmark && claim.MachineRecorded() && claim.Machine != schema.CurrentMachineFingerprint() {
+		return Row{Claim: claim, Actual: actual, Verdict: Skip}
+	}
 	verdict := Pass
 	if !claim.ParsedTolerance.Within(claim.Declared, actual) {
 		verdict = Breach
@@ -61,10 +72,11 @@ type Report struct {
 	Rows []Row
 }
 
-// Breached reports whether any claim drifted beyond tolerance or failed to extract.
+// Breached reports whether any claim drifted beyond tolerance or failed to
+// extract. Skip is an intentional non-verification, not a failure.
 func (r Report) Breached() bool {
 	for _, row := range r.Rows {
-		if row.Verdict != Pass {
+		if row.Verdict == Breach || row.Verdict == Error {
 			return true
 		}
 	}
@@ -86,6 +98,12 @@ func (r Report) Write(w io.Writer) error {
 		if row.Verdict == Error {
 			fmt.Fprintf(tw, "%s\t%s\t-\t-\t%s\t%s (%s)\n",
 				row.Claim.ID, FormatFloat(row.Claim.Declared), row.Claim.Tolerance, row.Verdict, row.Err)
+			continue
+		}
+		if row.Verdict == Skip {
+			fmt.Fprintf(tw, "%s\t%s\t%s\t-\t%s\t%s (declared on %s, running on %s)\n",
+				row.Claim.ID, FormatFloat(row.Claim.Declared), FormatFloat(row.Actual), row.Claim.Tolerance,
+				row.Verdict, row.Claim.Machine, schema.CurrentMachineFingerprint())
 			continue
 		}
 		delta := row.Actual - row.Claim.Declared

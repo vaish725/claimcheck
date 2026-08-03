@@ -2,11 +2,14 @@ package update
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/vaish725/claimcheck/internal/schema"
 )
 
 // newFixtureRepo creates a fully-covered Go module in a git repo, plus a
@@ -231,5 +234,100 @@ claims:
 		if fc.Path == "resume" || strings.HasSuffix(fc.Path, string(os.PathSeparator)+"resume") {
 			t.Errorf("plan attempted to rewrite a file for the reserved \"resume\" target: %s", fc.Path)
 		}
+	}
+}
+
+// newBenchmarkClaimsFile writes a claims.yaml with a single benchmark
+// claim, no git repo needed - the benchmark extractor just runs a shell
+// command, it never touches git.
+func newBenchmarkClaimsFile(t *testing.T, machine string) (dir, claimsPath string) {
+	t.Helper()
+	dir = t.TempDir()
+	claimsPath = filepath.Join(dir, "claims.yaml")
+	content := fmt.Sprintf(`repo: fixture
+claims:
+  - id: query_p50
+    type: benchmark
+    command: "echo '{\"p50_ms\": 0.09}'"
+    field: p50_ms
+    declared: 1
+    machine: %s
+    tolerance: "+-25%%"
+    asserted_in: [resume]
+`, machine)
+	if err := os.WriteFile(claimsPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("writing claims.yaml: %v", err)
+	}
+	return dir, claimsPath
+}
+
+func TestBuildPlanBenchmarkBootstrapsMachine(t *testing.T) {
+	dir, claimsPath := newBenchmarkClaimsFile(t, schema.UnsetMachine)
+	ctx := context.Background()
+
+	plan, err := BuildPlan(ctx, dir, claimsPath)
+	if err != nil {
+		t.Fatalf("BuildPlan: %v", err)
+	}
+	if plan.Failed() {
+		t.Fatalf("Plan.Failed() = true: %+v", plan.Changes)
+	}
+	if !plan.Changed() {
+		t.Fatal("Plan.Changed() = false, want true (declared is wrong and machine is unset)")
+	}
+
+	if err := Apply(plan); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+
+	got, err := os.ReadFile(claimsPath)
+	if err != nil {
+		t.Fatalf("reading claims.yaml: %v", err)
+	}
+	current := schema.CurrentMachineFingerprint()
+	if !strings.Contains(string(got), "declared: 0.09") {
+		t.Errorf("claims.yaml missing updated declared value; got:\n%s", got)
+	}
+	if !strings.Contains(string(got), "machine: "+current) {
+		t.Errorf("claims.yaml missing established machine fingerprint %q; got:\n%s", current, got)
+	}
+
+	plan2, err := BuildPlan(ctx, dir, claimsPath)
+	if err != nil {
+		t.Fatalf("second BuildPlan: %v", err)
+	}
+	if plan2.Changed() {
+		t.Errorf("second Plan.Changed() = true, want false (bootstrap should be idempotent)")
+	}
+}
+
+func TestBuildPlanBenchmarkRefusesDifferentMachine(t *testing.T) {
+	dir, claimsPath := newBenchmarkClaimsFile(t, "bogus-os/bogus-arch/0cpu")
+	ctx := context.Background()
+
+	plan, err := BuildPlan(ctx, dir, claimsPath)
+	if err != nil {
+		t.Fatalf("BuildPlan: %v", err)
+	}
+	if !plan.Failed() {
+		t.Fatal("Plan.Failed() = false, want true (claim is declared on a different machine)")
+	}
+	if plan.Changed() {
+		t.Fatal("Plan.Changed() = true, want false (a machine-mismatched claim must not be rewritten)")
+	}
+
+	before, err := os.ReadFile(claimsPath)
+	if err != nil {
+		t.Fatalf("reading claims.yaml: %v", err)
+	}
+	if err := Apply(plan); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	after, err := os.ReadFile(claimsPath)
+	if err != nil {
+		t.Fatalf("reading claims.yaml after Apply: %v", err)
+	}
+	if string(before) != string(after) {
+		t.Error("claims.yaml changed on disk despite the plan reporting no file changes")
 	}
 }

@@ -21,9 +21,10 @@ import (
 // résumé mode; it names no file, so update never tries to open it.
 const resumeTarget = "resume"
 
-// Change is one claim's before/after value. Err is set if the actual value
-// couldn't be recomputed, in which case NewValue is meaningless and the
-// claim is left untouched everywhere.
+// Change is one claim's before/after value. Err is set if the claim could
+// not be safely updated - extraction failed, or (for a benchmark claim) it
+// was declared on a different machine - in which case NewValue is
+// meaningless and the claim is left untouched everywhere.
 type Change struct {
 	Claim    schema.Claim // Claim.Declared is the OLD value
 	NewValue float64
@@ -73,6 +74,7 @@ func BuildPlan(ctx context.Context, repoPath, claimsPath string) (*Plan, error) 
 
 	plan := &Plan{}
 	declaredValues := make(map[string]string)
+	machineValues := make(map[string]string)
 	markerValuesByFile := make(map[string]map[string]string)
 
 	for _, row := range rep.Rows {
@@ -82,11 +84,23 @@ func BuildPlan(ctx context.Context, repoPath, claimsPath string) (*Plan, error) 
 			plan.Changes = append(plan.Changes, change)
 			continue
 		}
+		if row.Verdict == report.Skip {
+			// A benchmark claim declared on a different machine: writing
+			// this machine's number into "declared" would silently launder
+			// a cross-machine comparison, exactly what claimcheck refuses
+			// to do. Leave it untouched, same as an extraction failure.
+			change.Err = fmt.Errorf("declared on a different machine (%s); run update there, or clear the machine field to adopt this one", row.Claim.Machine)
+			plan.Changes = append(plan.Changes, change)
+			continue
+		}
 		change.NewValue = row.Actual
 		plan.Changes = append(plan.Changes, change)
 
 		valueText := report.FormatFloat(row.Actual)
 		declaredValues[row.Claim.ID] = valueText
+		if row.Claim.Type == schema.Benchmark {
+			machineValues[row.Claim.ID] = schema.CurrentMachineFingerprint()
+		}
 
 		for _, target := range row.Claim.AssertedIn {
 			if target == resumeTarget {
@@ -99,14 +113,28 @@ func BuildPlan(ctx context.Context, repoPath, claimsPath string) (*Plan, error) 
 		}
 	}
 
-	spans, err := locateDeclaredSpans(rawClaims)
+	declaredSpans, err := locateFieldSpans(rawClaims, "declared", true)
 	if err != nil {
 		return nil, fmt.Errorf("locating declared values in %s: %w", claimsPath, err)
 	}
-	newClaims, err := rewrite.ReplaceSpans(rawClaims, spans, declaredValues)
+	afterDeclared, err := rewrite.ReplaceSpans(rawClaims, declaredSpans, declaredValues)
 	if err != nil {
 		return nil, fmt.Errorf("rewriting %s: %w", claimsPath, err)
 	}
+
+	// A second pass against the already-patched bytes: machine is optional
+	// (only claims that opted in by including the key get touched), and
+	// its byte offsets must be found after the declared-value rewrite,
+	// since that rewrite can shift everything after it on the same line.
+	machineSpans, err := locateFieldSpans(afterDeclared, "machine", false)
+	if err != nil {
+		return nil, fmt.Errorf("locating machine fingerprints in %s: %w", claimsPath, err)
+	}
+	newClaims, err := rewrite.ReplaceSpans(afterDeclared, machineSpans, machineValues)
+	if err != nil {
+		return nil, fmt.Errorf("rewriting %s: %w", claimsPath, err)
+	}
+
 	if !bytes.Equal(newClaims, rawClaims) {
 		plan.Files = append(plan.Files, FileChange{Path: claimsPath, OldData: rawClaims, NewData: newClaims})
 	}

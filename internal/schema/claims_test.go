@@ -3,6 +3,8 @@ package schema
 import (
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -140,5 +142,93 @@ claims: []
 
 	if _, err := Load(path); err == nil {
 		t.Fatal("expected error for empty claims list, got none")
+	}
+}
+
+func TestLoadBenchmarkValid(t *testing.T) {
+	path := writeTempClaims(t, `
+repo: example
+claims:
+  - id: query_p50
+    type: benchmark
+    command: "echo '{\"p50_ms\": 0.09}'"
+    field: p50_ms
+    declared: 0.09
+    machine: ""
+    tolerance: "+-25%"
+    asserted_in: [resume]
+`)
+
+	cf, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	c := cf.Claims[0]
+	if c.Command == "" || c.Field != "p50_ms" {
+		t.Errorf("benchmark claim fields not loaded: %+v", c)
+	}
+}
+
+func TestLoadBenchmarkMissingCommand(t *testing.T) {
+	path := writeTempClaims(t, `
+repo: example
+claims:
+  - id: query_p50
+    type: benchmark
+    field: p50_ms
+    declared: 0.09
+    tolerance: "+-25%"
+    asserted_in: [resume]
+`)
+
+	if _, err := Load(path); err == nil {
+		t.Fatal("expected error for benchmark claim missing command, got none")
+	}
+}
+
+func TestLoadBenchmarkMissingField(t *testing.T) {
+	path := writeTempClaims(t, `
+repo: example
+claims:
+  - id: query_p50
+    type: benchmark
+    command: "echo '{\"p50_ms\": 0.09}'"
+    declared: 0.09
+    tolerance: "+-25%"
+    asserted_in: [resume]
+`)
+
+	if _, err := Load(path); err == nil {
+		t.Fatal("expected error for benchmark claim missing field, got none")
+	}
+}
+
+func TestMachineRecorded(t *testing.T) {
+	cases := []struct {
+		machine string
+		want    bool
+	}{
+		{"", false},
+		{UnsetMachine, false},
+		{"darwin/arm64/8cpu", true},
+	}
+	for _, tc := range cases {
+		c := Claim{Machine: tc.machine}
+		if got := c.MachineRecorded(); got != tc.want {
+			t.Errorf("MachineRecorded() for %q = %v, want %v", tc.machine, got, tc.want)
+		}
+	}
+}
+
+func TestCurrentMachineFingerprint(t *testing.T) {
+	fp := CurrentMachineFingerprint()
+	if fp == "" {
+		t.Fatal("CurrentMachineFingerprint() returned an empty string")
+	}
+	if !strings.Contains(fp, runtime.GOOS) {
+		t.Errorf("fingerprint %q does not contain GOOS %q", fp, runtime.GOOS)
+	}
+	if !strings.Contains(fp, runtime.GOARCH) {
+		t.Errorf("fingerprint %q does not contain GOARCH %q", fp, runtime.GOARCH)
 	}
 }

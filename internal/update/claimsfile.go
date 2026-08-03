@@ -8,14 +8,20 @@ import (
 	"github.com/vaish725/claimcheck/internal/rewrite"
 )
 
-// locateDeclaredSpans decodes raw claims.yaml into a yaml.Node tree to find
-// exactly where each claim's "declared" scalar sits in the original text,
-// via the node's Line/Column - no re-encoding needed, so every other byte
-// (comments, key order, indentation) stays untouched.
+// locateFieldSpans decodes raw claims.yaml into a yaml.Node tree to find
+// exactly where each claim's field scalar sits in the original text, via
+// the node's Line/Column - no re-encoding needed, so every other byte
+// (comments, key order, indentation) stays untouched. If required, a claim
+// missing field is an error; otherwise that claim is just skipped (e.g.
+// "machine" is opt-in - a claim without it simply never gets a span).
 //
-// Declared values must be bare (unquoted) YAML numbers, so a span's byte
-// length equals len(node.Value) with no unescaping required.
-func locateDeclaredSpans(raw []byte) ([]rewrite.Span, error) {
+// Field values must be bare (unquoted) YAML scalars: a quoted scalar's
+// Column points at the opening quote while Value excludes the quotes, so
+// naively splicing [Column, Column+len(Value)) would land inside the
+// string, not around it. Bare scalars have no such mismatch (confirmed
+// empirically against yaml.v3), so a quoted or block scalar is rejected
+// with a clear error instead of risking silent corruption.
+func locateFieldSpans(raw []byte, field string, required bool) ([]rewrite.Span, error) {
 	var doc yaml.Node
 	if err := yaml.Unmarshal(raw, &doc); err != nil {
 		return nil, fmt.Errorf("parsing claims.yaml structure: %w", err)
@@ -37,16 +43,22 @@ func locateDeclaredSpans(raw []byte) ([]rewrite.Span, error) {
 		if idNode == nil {
 			return nil, fmt.Errorf("claims.yaml: a claim near line %d has no id", claimNode.Line)
 		}
-		declaredNode := findMapValue(claimNode, "declared")
-		if declaredNode == nil {
-			return nil, fmt.Errorf("claim %q: has no declared field", idNode.Value)
+		fieldNode := findMapValue(claimNode, field)
+		if fieldNode == nil {
+			if required {
+				return nil, fmt.Errorf("claim %q: has no %s field", idNode.Value, field)
+			}
+			continue
+		}
+		if fieldNode.Style != 0 {
+			return nil, fmt.Errorf("claim %q: %s must be a bare (unquoted) value, not a quoted or block scalar", idNode.Value, field)
 		}
 
-		start, err := byteOffset(raw, lineStarts, declaredNode.Line, declaredNode.Column)
+		start, err := byteOffset(raw, lineStarts, fieldNode.Line, fieldNode.Column)
 		if err != nil {
-			return nil, fmt.Errorf("claim %q: locating declared value: %w", idNode.Value, err)
+			return nil, fmt.Errorf("claim %q: locating %s value: %w", idNode.Value, field, err)
 		}
-		end := start + len(declaredNode.Value)
+		end := start + len(fieldNode.Value)
 
 		spans = append(spans, rewrite.Span{ID: idNode.Value, Start: start, End: end})
 	}

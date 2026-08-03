@@ -31,6 +31,7 @@ var registry = map[key]Extractor{
 	{Type: schema.Coverage, Runner: schema.RunnerPytest}:  pytestCoverageExtractor{},
 	{Type: schema.LOC}:         locExtractor{},
 	{Type: schema.CommitCount}: commitCountExtractor{},
+	{Type: schema.Benchmark}:   benchmarkExtractor{},
 }
 
 // Lookup returns the extractor for claim's (type, runner), or an error if
