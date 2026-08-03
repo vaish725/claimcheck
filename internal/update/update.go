@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/vaish725/claimcheck/internal/report"
 	"github.com/vaish725/claimcheck/internal/rewrite"
@@ -148,7 +149,11 @@ func BuildPlan(ctx context.Context, repoPath, claimsPath string) (*Plan, error) 
 		if err != nil {
 			return nil, fmt.Errorf("reading %s (listed in asserted_in): %w", target, err)
 		}
-		newData, err := rewrite.Replace(old, markerValuesByFile[target])
+		rewriteFunc := rewrite.Replace
+		if strings.EqualFold(filepath.Ext(target), ".tex") {
+			rewriteFunc = rewrite.ReplaceLaTeX
+		}
+		newData, err := rewriteFunc(old, markerValuesByFile[target])
 		if err != nil {
 			return nil, fmt.Errorf("rewriting markers in %s: %w", target, err)
 		}

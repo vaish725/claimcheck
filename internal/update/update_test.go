@@ -196,6 +196,58 @@ claims:
 	}
 }
 
+// TestBuildPlanRewritesLaTeXFile confirms update.go dispatches a .tex
+// asserted_in target to rewrite.ReplaceLaTeX rather than the
+// Markdown-marker rewrite.Replace, and that surrounding LaTeX (a comment,
+// another macro) survives untouched.
+func TestBuildPlanRewritesLaTeXFile(t *testing.T) {
+	dir := t.TempDir()
+	claimsPath := filepath.Join(dir, "claims.yaml")
+	claims := `repo: fixture
+claims:
+  - id: test_count
+    type: benchmark
+    command: "echo '{\"v\": 91}'"
+    field: v
+    declared: 999
+    tolerance: exact
+    asserted_in: [resume.tex]
+`
+	if err := os.WriteFile(claimsPath, []byte(claims), 0o644); err != nil {
+		t.Fatalf("writing claims.yaml: %v", err)
+	}
+
+	texPath := filepath.Join(dir, "resume.tex")
+	texContent := "% a plain LaTeX comment, must survive untouched\n" +
+		`\resumeItem{Shipped a system with \claimcheck{test_count}{999} passing tests.}` + "\n" +
+		`\textbf{unrelated macro, must survive untouched}` + "\n"
+	if err := os.WriteFile(texPath, []byte(texContent), 0o644); err != nil {
+		t.Fatalf("writing resume.tex: %v", err)
+	}
+
+	plan, err := BuildPlan(context.Background(), dir, claimsPath)
+	if err != nil {
+		t.Fatalf("BuildPlan: %v", err)
+	}
+	if plan.Failed() {
+		t.Fatalf("Plan.Failed() = true: %+v", plan.Changes)
+	}
+	if err := Apply(plan); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+
+	got, err := os.ReadFile(texPath)
+	if err != nil {
+		t.Fatalf("reading resume.tex: %v", err)
+	}
+	want := "% a plain LaTeX comment, must survive untouched\n" +
+		`\resumeItem{Shipped a system with \claimcheck{test_count}{91} passing tests.}` + "\n" +
+		`\textbf{unrelated macro, must survive untouched}` + "\n"
+	if string(got) != want {
+		t.Errorf("resume.tex after Apply = %q, want %q", got, want)
+	}
+}
+
 func TestBuildPlanResumeOnlyAssertedInIsNotTreatedAsAFile(t *testing.T) {
 	dir := t.TempDir()
 	claimsPath := filepath.Join(dir, "claims.yaml")

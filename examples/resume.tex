@@ -1,0 +1,11 @@
+% Example snippet showing how to make a number in your LaTeX resume
+% rewritable by `claimcheck update`. Add this line once to your preamble -
+% \claimcheck just renders its second argument, the first is metadata
+% claimcheck reads to find the value's byte span:
+%
+%   \newcommand{\claimcheck}[2]{#2}
+%
+% Then wrap any number you want kept in sync with a claims.yaml claim:
+
+\resumeItem{Shipped a system with \claimcheck{test_count}{88} passing tests
+and \claimcheck{coverage}{54}\% coverage.}

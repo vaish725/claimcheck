@@ -98,6 +98,23 @@ the closing tag, not inside it:
 Coverage: <!-- claimcheck:coverage -->54<!-- /claimcheck:coverage -->%.
 ```
 
+For a `.tex` file, `<!-- -->` doesn't work - a LaTeX `%` comment runs to
+the end of the line, so there's no way to close a comment mid-sentence the
+way HTML can. Instead, wrap the value in a small macro (see
+[examples/resume.tex](examples/resume.tex)):
+
+```latex
+% once, in your preamble:
+\newcommand{\claimcheck}[2]{#2}
+
+% then, anywhere in the document:
+\resumeItem{Shipped a system with \claimcheck{test_count}{88} passing tests.}
+```
+
+`\claimcheck` renders only its second argument - the first is metadata
+`update` reads to find the value, the same role the id plays in a
+`<!-- claimcheck:id -->` marker.
+
 `update` never writes a partial file: each rewrite is a temp-file-plus-rename,
 so an interrupted run can't corrupt a source file, and comments and
 formatting elsewhere in `claims.yaml` are left exactly as they were - only
@@ -211,7 +228,7 @@ jobs:
 Test count, coverage, LOC, commit count, and benchmark claims are all
 implemented, with concurrent extraction and a per-claim timeout so a hung
 subprocess can't hang CI. `claimcheck verify`, `claimcheck update` (marker
-rewriting, atomic writes, machine-fingerprint gating for benchmarks), and
-`claimcheck resume` (checking résumé-asserted claims across repos) are all
-implemented. LaTeX span substitution and staleness warnings are not built
-yet.
+rewriting in both Markdown/README and LaTeX files, atomic writes,
+machine-fingerprint gating for benchmarks), and `claimcheck resume`
+(checking résumé-asserted claims across repos) are all implemented.
+Staleness warnings are not built yet.
