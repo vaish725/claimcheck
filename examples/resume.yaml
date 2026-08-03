@@ -1,0 +1,12 @@
+# Example resume.yaml. Lists every repo whose claims.yaml has claims
+# asserted_in: [resume]. Run `claimcheck resume` from wherever this file
+# lives (or pass -file to point at it) to check all of them in one pass.
+#
+# Paths may be:
+#   - ~-relative, expanded against your home directory
+#   - relative, resolved against this file's own directory
+#   - absolute
+repos:
+  - path: ~/code/codesearch
+  - path: ~/code/claimcheck
+  - path: ../another-project

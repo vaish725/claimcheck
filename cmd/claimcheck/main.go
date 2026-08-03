@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/vaish725/claimcheck/internal/resume"
 	"github.com/vaish725/claimcheck/internal/update"
 	"github.com/vaish725/claimcheck/internal/verify"
 )
@@ -28,6 +29,8 @@ func run(args []string) int {
 		return runVerify(args[1:])
 	case "update":
 		return runUpdate(args[1:])
+	case "resume":
+		return runResume(args[1:])
 	case "-h", "--help", "help":
 		usage()
 		return 0
@@ -44,6 +47,7 @@ func usage() {
 Usage:
   claimcheck verify [flags] [repo-path]
   claimcheck update [flags] [repo-path]
+  claimcheck resume [flags]
 
 repo-path defaults to the current directory.
 
@@ -58,6 +62,12 @@ Flags for update:
         path to claims.yaml (default "<repo-path>/claims.yaml")
   -dry-run
         print what would change without writing anything
+
+Flags for resume:
+  -file string
+        path to resume.yaml (default "resume.yaml")
+  -soft
+        print the summary without failing (exit 0 even on breach)
 `)
 }
 
@@ -139,6 +149,34 @@ func runUpdate(args []string) int {
 	}
 
 	if plan.Failed() {
+		return 1
+	}
+	return 0
+}
+
+// runResume checks every repo listed in resume.yaml and prints which
+// résumé-asserted claims have drifted. Exits non-zero if any repo failed
+// outright or has a breaching/erroring claim, unless -soft is set.
+func runResume(args []string) int {
+	fs := flag.NewFlagSet("resume", flag.ContinueOnError)
+	fileFlag := fs.String("file", "resume.yaml", "path to resume.yaml")
+	soft := fs.Bool("soft", false, "print the summary without failing (exit 0 even on breach)")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	results, err := resume.Run(context.Background(), *fileFlag)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "claimcheck: %v\n", err)
+		return 1
+	}
+
+	if err := resume.WriteSummary(os.Stdout, results); err != nil {
+		fmt.Fprintf(os.Stderr, "claimcheck: writing summary: %v\n", err)
+		return 1
+	}
+
+	if resume.Breached(results) && !*soft {
 		return 1
 	}
 	return 0

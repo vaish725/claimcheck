@@ -144,6 +144,35 @@ different laptop or CI runner can never silently overwrite your declared
 number - you have to run `update` on the original machine, or clear the
 `machine` field back to `unset` to deliberately adopt a new one.
 
+## Checking your résumé across repos
+
+Any claim can list `resume` in `asserted_in` to mark it as a number that
+appears in your résumé, not just a repo's README:
+
+```yaml
+asserted_in: [README.md, resume]
+```
+
+`claimcheck resume` checks every repo's résumé-asserted claims in one pass,
+across every repo you list in a central `resume.yaml` (see
+[examples/resume.yaml](examples/resume.yaml)):
+
+```yaml
+repos:
+  - path: ~/code/codesearch
+  - path: ~/code/claimcheck
+```
+
+```
+claimcheck resume
+```
+
+Repos are checked concurrently, and one repo being unreachable (moved,
+deleted, a broken `claims.yaml`) doesn't stop the others from being
+checked - it shows up as its own error in the summary. Use `-file` to
+point at a `resume.yaml` that isn't in the current directory, and `-soft`
+to print the summary without failing.
+
 ## Tolerance
 
 Every claim must declare a tolerance; there is no default. This is
@@ -181,7 +210,8 @@ jobs:
 
 Test count, coverage, LOC, commit count, and benchmark claims are all
 implemented, with concurrent extraction and a per-claim timeout so a hung
-subprocess can't hang CI. `claimcheck verify` and `claimcheck update`
-(marker rewriting in README-style files, atomic writes, machine-fingerprint
-gating for benchmarks) are both implemented. LaTeX span substitution and
-resume mode across multiple repos are not built yet.
+subprocess can't hang CI. `claimcheck verify`, `claimcheck update` (marker
+rewriting, atomic writes, machine-fingerprint gating for benchmarks), and
+`claimcheck resume` (checking résumé-asserted claims across repos) are all
+implemented. LaTeX span substitution and staleness warnings are not built
+yet.

@@ -174,3 +174,43 @@ func TestRunUpdateWritesChanges(t *testing.T) {
 		t.Errorf("claims.yaml still contains the deliberately-wrong declared value after update; got:\n%s", claims)
 	}
 }
+
+func TestRunResumeMissingFile(t *testing.T) {
+	dir := t.TempDir()
+	code := run([]string{"resume", "-file", filepath.Join(dir, "resume.yaml")})
+	if code != 1 {
+		t.Errorf("run resume with missing resume.yaml = %d, want 1", code)
+	}
+}
+
+func TestRunResumeEndToEnd(t *testing.T) {
+	dir := t.TempDir()
+	repoDir := filepath.Join(dir, "repo")
+	if err := os.MkdirAll(repoDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	claims := `repo: fixture
+claims:
+  - id: resume_claim
+    type: benchmark
+    command: "echo '{\"v\": 1}'"
+    field: v
+    declared: 1
+    tolerance: exact
+    asserted_in: [resume]
+`
+	if err := os.WriteFile(filepath.Join(repoDir, "claims.yaml"), []byte(claims), 0o644); err != nil {
+		t.Fatalf("writing claims.yaml: %v", err)
+	}
+
+	resumePath := filepath.Join(dir, "resume.yaml")
+	resumeYAML := "repos:\n  - path: " + repoDir + "\n"
+	if err := os.WriteFile(resumePath, []byte(resumeYAML), 0o644); err != nil {
+		t.Fatalf("writing resume.yaml: %v", err)
+	}
+
+	code := run([]string{"resume", "-file", resumePath})
+	if code != 0 {
+		t.Errorf("run resume = %d, want 0", code)
+	}
+}

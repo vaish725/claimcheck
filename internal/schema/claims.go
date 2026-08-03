@@ -69,6 +69,11 @@ func (c Claim) MachineRecorded() bool {
 	return c.Machine != "" && c.Machine != UnsetMachine
 }
 
+// ResumeTarget is the reserved asserted_in entry standing for a person's
+// résumé rather than a file in the repo. update.go skips it when treating
+// asserted_in entries as files to rewrite; resume mode selects for it.
+const ResumeTarget = "resume"
+
 // ClaimsFile is the top-level shape of claims.yaml.
 type ClaimsFile struct {
 	Repo   string  `yaml:"repo"`

@@ -17,10 +17,6 @@ import (
 	"github.com/vaish725/claimcheck/internal/verify"
 )
 
-// resumeTarget is the reserved asserted_in entry for the future cross-repo
-// résumé mode; it names no file, so update never tries to open it.
-const resumeTarget = "resume"
-
 // Change is one claim's before/after value. Err is set if the claim could
 // not be safely updated - extraction failed, or (for a benchmark claim) it
 // was declared on a different machine - in which case NewValue is
@@ -103,7 +99,7 @@ func BuildPlan(ctx context.Context, repoPath, claimsPath string) (*Plan, error) 
 		}
 
 		for _, target := range row.Claim.AssertedIn {
-			if target == resumeTarget {
+			if target == schema.ResumeTarget {
 				continue
 			}
 			if markerValuesByFile[target] == nil {
